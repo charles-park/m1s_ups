@@ -46,6 +46,8 @@ ch55x 참조 사이트
   root@odroid:~/m1s_ups# arduino-cli compile -b CH55xDuino:mcs51:ch552 ups_fw
   # compile & download
   root@odroid:~/m1s_ups# arduino-cli compile -b CH55xDuino:mcs51:ch552 ups_fw -u -p /dev/ttyACM0
+  # download only
+  root@odroid:~/m1s_ups# arduino-cli upload -b CH55xDuino:mcs51:ch552 -i ups_fw.hex -p /dev/ttyACM0
 
 ```
 ## ch55x 전용 tool을 사용한 download
@@ -60,6 +62,21 @@ ch55x 참조 사이트
   root@odroid:~/cli# chmod 777 ./vnproch55x
   root@odroid:~/cli# cp vnproch55x /bin/
 ```
+* Download (Nomal state : /dev/ttyACM0 node가 있고 1209:c550 device가 있는 경우)
+```
+  # UART(/dev/ttyACM0)의 baud를 변경하여 bootloader모드로 진입 후 다운로드 함.
+  usbreset 1209:c550
+  stty -F /dev/ttyACM0 1200
+  vnproch55x -r 2 -t ch552 <fw_file.hex>
+  stty -F /dev.ttyACM0 9600
+```
+* Donwload (Boot state : /dev/ttyACM0 node가 없고 4348:55e0 device가 있는 경우)
+```
+  # UART(/dev/ttyACM0)의 baud를 변경하여 bootloader모드로 진입 후 다운로드 함.
+  usbreset 43489:55e0
+  vnproch55x -r 2 -t ch552 <fw_file.hex>
+```
+
 ## Hex file 생성위치
 ```
   /tmp/arduino/sketches/***/ups_fw.hex
