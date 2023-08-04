@@ -80,3 +80,7 @@ ch55x 참조 사이트
 ```
   /tmp/arduino/sketches/***/ups_fw.hex
 ```
+
+## UPS Protocol
+UART Protocol : <https://docs.google.com/spreadsheets/d/1JPPSNaCHjGbVeWtuEiCI5QtiYEPvHmMj1amU0sMJ0OE/edit#gid=0>
+
