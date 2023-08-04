@@ -72,9 +72,8 @@ ch55x 참조 사이트
 ```
 * Donwload (Boot state : /dev/ttyACM0 node가 없고 4348:55e0 device가 있는 경우)
 ```
-  # UART(/dev/ttyACM0)의 baud를 변경하여 bootloader모드로 진입 후 다운로드 함.
   usbreset 43489:55e0
-  vnproch55x -r 2 -t ch552 <fw_file.hex>
+  vnproch55x -r 2 -t ch552 <fw_file.hex>HOST -> UPS (4 Bytes)									
 ```
 
 ## Hex file 생성위치
