@@ -53,7 +53,7 @@ arduino-cli install 참조사이트(X86)
   root@odroid:~/m1s_ups# arduino-cli upload -b CH55xDuino:mcs51:ch552 -i ups_fw.hex -p /dev/ttyACM0
 
 ```
-## ch55x 전용 tool을 사용한 download
+## ch55x 전용 tool을 사용한 download (script/download.sh 참조)
 * bootloader rule 복사
 ```
   root@odroid:~/cli# wget https://cdn.jsdelivr.net/gh/DeqingSun/ch55xduino@playground/ch55xduino/tools/linux_arm/99-ch55xbl.rules
