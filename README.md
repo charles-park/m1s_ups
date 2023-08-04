@@ -27,7 +27,7 @@ ch55x 참조 사이트
     - https://raw.githubusercontent.com/DeqingSun/ch55xduino/ch55xduino/package_ch55xduino_mcs51_index.json
 ```
 
-* board package index file download
+* board package index file download (ARM Board에 설치시에만 필요함. add url을 참조하여 진행하지 못하는 현상이 발생)
 ```
   root@odroid:~/cli# cd ~/.arduino15
   root@odroid:~/.arduino15# wget https://raw.githubusercontent.com/DeqingSun/ch55xduino/ch55xduino/package_ch55xduino_mcs51_index.json
