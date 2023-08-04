@@ -6,7 +6,7 @@ ch55x 참조 사이트
 * <https://cdn.jsdelivr.net/gh/DeqingSun/ch55xduino@playground>
 * <https://github.com/topics/ch552>
 
-## Install Package
+## Install Package <https://m.blog.naver.com/roboholic84/221815428642>
 * arduino-cli install
 ```
   root@odroid:~# mkdir cli
