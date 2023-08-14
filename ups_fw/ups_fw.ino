@@ -501,8 +501,14 @@ void protocol_check(void)
                     MillisRequestChagerStatus = cur_millis;
                     break;
                 case    'W':
-                    PeriodRequestWatchdogTime = cal_period;
-                    MillisRequestWatchdogTime = cur_millis;
+                    /* Target Power가 ON인 상태에서만 Watchdog control */
+                    if (TargetPowerStatus) {
+                        PeriodRequestWatchdogTime = cal_period;
+                        MillisRequestWatchdogTime = cur_millis;
+                    } else {
+                        PeriodRequestWatchdogTime = 0;
+                        MillisRequestWatchdogTime = 0;
+                    }
                     break;
                 case    'P':
                     /* system watch dog & repeat flag all clear */
