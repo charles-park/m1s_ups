@@ -98,7 +98,11 @@
 #define BAT_LEVEL_LV2   3650
 #define BAT_LEVEL_LV1   3550
 
-#define BAT_LEVEL_LV0   3300
+/* Battery level이 3400mV보다 작은 경우 강제로 system power off */
+#define BAT_LEVEL_OFF   3400
+
+/* booting을 위한 최소 battery level 설정 */
+#define BAT_LEVEL_BOOT  BAT_LEVEL_LV2
 
 /*---------------------------------------------------------------------------*/
 /* ADC Raw 샘플 갯수. 샘플 갯수중 최대값, 최소값을 제외한 평균값은 ADC값으로 사용한다. */
@@ -133,7 +137,6 @@ __xdata bool LED_FULL_STATUS = false;
 __xdata char Protocol[PROTOCOL_SIZE];
 
 /*---------------------------------------------------------------------------*/
-
 /*---------------------------------------------------------------------------*/
 /* Battery Status */
 /*---------------------------------------------------------------------------*/
@@ -151,7 +154,6 @@ __xdata enum eBATTERY_STATUS BatteryStatus = eBATTERY_REMOVED;
 /* Main Loop Control */
 /*---------------------------------------------------------------------------*/
 #define TARGET_RESET_DELAY      100
-#define TARGET_POWERON_DELAY    100
 
 /* Battery Read 및 Display 주기 */
 #define PERIOD_LOOP_MILLIS      500
@@ -298,6 +300,7 @@ void battery_avr_volt_init (void)
 /*---------------------------------------------------------------------------*/
 float battery_avr_volt (enum eBATTERY_STATUS battery_status)
 {
+    /* 처음 booting시 초기화 */
     static bool ErrorFlag = true;
     static int  SamplePos = 0;
 
@@ -570,11 +573,9 @@ void repeat_data_check(void)
 /*---------------------------------------------------------------------------*/
 void target_system_reset (void)
 {
-    pinMode (PORT_CTL_RESET, OUTPUT);   digitalWrite (PORT_CTL_RESET, 1);
-
-    delay (TARGET_RESET_DELAY);
-
-    pinMode (PORT_CTL_RESET, INPUT);
+    digitalWrite (PORT_CTL_RESET, 0);   delay (TARGET_RESET_DELAY);
+    digitalWrite (PORT_CTL_RESET, 1);   delay (TARGET_RESET_DELAY);
+    digitalWrite (PORT_CTL_RESET, 0);
 
     USBSerial_println ("Target system reset...");
 }
@@ -583,24 +584,21 @@ void target_system_reset (void)
 void target_system_power (bool onoff)
 {
     if (onoff) {
-        pinMode (PORT_CTL_POWER, INPUT);
+        digitalWrite (PORT_CTL_POWER, 0);
 
-        delay (TARGET_POWERON_DELAY);
-
-        pinMode (PORT_CTL_POWER, OUTPUT);   digitalWrite (PORT_CTL_POWER, 1);
-
-        delay (TARGET_POWERON_DELAY);
-
-        pinMode (PORT_CTL_POWER, INPUT);
+        target_system_reset ();
 
         USBSerial_println ("Target system power on...");
     } else {
         /* target system force power off */
-        pinMode (PORT_CTL_POWER, OUTPUT);   digitalWrite (PORT_CTL_POWER, 1);
+        digitalWrite (PORT_CTL_POWER, 1);
+
+        digitalWrite (PORT_CTL_RESET, 1);
 
         USBSerial_println ("Target system force power off...");
     }
     TargetPowerStatus = onoff;
+    USBSerial_flush ();
 }
 
 /*---------------------------------------------------------------------------*/
@@ -610,15 +608,17 @@ void port_init(void)
     pinMode(PORT_LED_CHRG, INPUT_PULLUP);
     pinMode(PORT_LED_FULL, INPUT_PULLUP);
 
-    pinMode(PORT_CTL_POWER,  INPUT);
-    pinMode(PORT_CTL_RESET,  INPUT);
-    pinMode(PORT_WATCHDOG,   INPUT);
+    pinMode(PORT_CTL_RESET, OUTPUT);    digitalWrite(PORT_CTL_RESET, 1);
+    pinMode(PORT_CTL_POWER, OUTPUT);    digitalWrite(PORT_CTL_POWER, 1);
+
+    /* Target GPIO Watchdog PIN */
+    pinMode(PORT_WATCHDOG, INPUT);
 
     /* Battery level led all clear */
-    pinMode(PORT_LED_LV4, OUTPUT);    digitalWrite(PORT_LED_LV4, 0);
-    pinMode(PORT_LED_LV3, OUTPUT);    digitalWrite(PORT_LED_LV3, 0);
-    pinMode(PORT_LED_LV2, OUTPUT);    digitalWrite(PORT_LED_LV2, 0);
-    pinMode(PORT_LED_LV1, OUTPUT);    digitalWrite(PORT_LED_LV1, 0);
+    pinMode(PORT_LED_LV4, OUTPUT);      digitalWrite(PORT_LED_LV4, 0);
+    pinMode(PORT_LED_LV3, OUTPUT);      digitalWrite(PORT_LED_LV3, 0);
+    pinMode(PORT_LED_LV2, OUTPUT);      digitalWrite(PORT_LED_LV2, 0);
+    pinMode(PORT_LED_LV1, OUTPUT);      digitalWrite(PORT_LED_LV1, 0);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -626,9 +626,6 @@ void setup()
 {
     /* UPS GPIO Port Init */
     port_init();
-
-    /* Target system reset */
-    target_system_reset ();
 
     /* 일정 Battery Level 확인 전 까지 Target system Power off */
     target_system_power (false);
@@ -639,19 +636,10 @@ void setup()
     detachInterrupt(0);
 #endif
 
-    /* 충분한 배터리가 있는지 확인 후 전원 ON */
-    /* 500ms 마다 Battery Level일 일정 Level이상인지 확인 */
-    while (true) {
-        if (battery_avr_volt(battery_status()) > BAT_LEVEL_LV1)
-            break;
+    /* Battery sampling arrary 초기화 */
+    battery_avr_volt (eBATTERY_REMOVED);
 
-        delay (PERIOD_LOOP_MILLIS);
-    }
-
-    /* Target Power On */
-    target_system_power(true);
-
-    /* ups system watchdog enable */
+    /* UPS System watchdog enable */
     GLOBAL_CFG_UNLOCK();
     WDT_ENABLE();
     WDT_CLR();
@@ -660,9 +648,10 @@ void setup()
 /*---------------------------------------------------------------------------*/
 void loop()
 {
-    /* ups system watchdog */
+    /* UPS System watchdog reset */
     WDT_CLR();
 
+    /* Target이 OFF상태의 경우에는 Loop를 2.5sec 마다 한번씩 실행하므로 ADC Update가 느릴 수 있음. */
     if(MillisLoop + PERIOD_LOOP_MILLIS < millis()) {
         MillisLoop      = millis ();
         BatteryAdcVolt  = battery_adc_volt ();
@@ -686,7 +675,7 @@ void loop()
             if (PowerOnEvent &&
                 ((BatteryStatus == eBATTERY_CHARGING) ||
                  (BatteryStatus == eBATTERY_FULL))) {
-                if (BatteryAvrVolt > BAT_LEVEL_LV1) {
+                if (BatteryAvrVolt > BAT_LEVEL_BOOT) {
                     PowerOnEvent = false;
                     target_system_power (true);
                 }
@@ -701,6 +690,12 @@ void loop()
             USBSerial_println(BatteryAvrVolt);
             USBSerial_println(MillisLoop);
 #endif
+        } else {
+            /* Battery Level이 3500mV보다 낮은 경우 강제로 Power off */
+            if (BAT_LEVEL_OFF > BatteryAvrVolt) {
+                USBSerial_println("Battery Level < 3400mV. Force Power Off...");
+                target_system_power (false);
+            }
         }
     }
 
@@ -710,6 +705,9 @@ void loop()
         TargetWatchdogClear = false;
         /* updata watchdog time */
         MillisRequestWatchdogTime = millis();
+#if defined (__DEBUG__)
+        USBSerial_println("TARGET Watchdog reset (GPIO Irq0)");
+#endif
     }
 #endif
     /* Serial message check */
@@ -735,10 +733,5 @@ void loop()
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-
-
-
-
-
 
 
