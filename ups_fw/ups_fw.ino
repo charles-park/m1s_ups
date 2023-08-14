@@ -14,10 +14,9 @@
 
 /*---------------------------------------------------------------------------*/
 #define FW_VERSION  "V0-1"
-#define PCB_1_REV   20230712
-#define PCB_2_REV   20230804
 
-#define PCB_REV     PCB_1_REV
+#define PCB_REV_20230712
+//#define PCB_REV_20230810
 
 /*---------------------------------------------------------------------------*/
 /* UPS System watchdog control */
@@ -25,18 +24,37 @@
 #define GLOBAL_CFG_UNLOCK()     { SAFE_MOD = 0x55; SAFE_MOD = 0xAA;}
 #define WDT_ENABLE()            ( GLOBAL_CFG |=  bWDOG_EN )
 #define WDT_DISABLE()           ( GLOBAL_CFG &= ~bWDOG_EN )
-#define WDT_CLR()               ( WDT_COUNT  = 0 )
+#define WDT_CLR()               ( WDOG_COUNT  = 0 )
 
 /*---------------------------------------------------------------------------*/
 /* TC4056A Charger status check pin */
 /*---------------------------------------------------------------------------*/
 /* CH552 GPIO P1.1 */
 #define PORT_BAT_ADC    11
-/* CH552 GPIO P3.2 */
-#define PORT_LED_CHRG   32
+
 /* CH552 GPIO P1.4 */
 #define PORT_LED_FULL   14
 
+#if defined(PCB_REV_20230712)
+    /* CH552 GPIO P3.2 */
+    #define PORT_LED_CHRG   32
+#else
+    /* CH552 GPIO P1.5 */
+    #define PORT_LED_CHRG   15
+#endif
+
+/*---------------------------------------------------------------------------*/
+/* Target watchdog control pin */
+/*---------------------------------------------------------------------------*/
+#if defined(PCB_REV_20230712)
+    /* CH552 GPIO P1.5 */
+    #define PORT_WATCHDOG   15
+#else
+    /* CH552 GPIO P3.2 */
+    #define PORT_WATCHDOG   32
+#endif
+
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /* Target Power / Reset control pin */
 /*---------------------------------------------------------------------------*/
@@ -45,13 +63,6 @@
 /* CH552 GPIO P3.3 */
 #define PORT_CTL_RESET  33
 
-/*---------------------------------------------------------------------------*/
-/* Target watchdog control pin */
-/*---------------------------------------------------------------------------*/
-/* CH552 GPIO P1.5 */
-#define PORT_WATCHDOG   15
-
-/*---------------------------------------------------------------------------*/
 /* Battery level display pin */
 /*---------------------------------------------------------------------------*/
 /* CH552 GPIO P3.0 */
@@ -64,9 +75,14 @@
 #define PORT_LED_LV1    16
 
 /*---------------------------------------------------------------------------*/
-/* TLV70245DBVR LDO Output(4.5V) = 4500 mV */
-//#define MICOM_VOLTAGE   4500
-#define MICOM_VDD_mV    5065
+#if defined(PCB_REV_20230712)
+    /* SMAZ5V0 Zener Diode (5000mV) */
+    #define MICOM_VDD_mV    5065
+#else
+    /* TLV70245DBVR LDO Output(4.5V) = 4500 mV */
+    #define MICOM_VDD_mV    4500
+#endif
+
 /* ADC 8 bits (256). mV resolution value */
 #define MICOM_ADC_RES   255
 /* R9(1.2K) */
@@ -137,7 +153,12 @@ __xdata enum eBATTERY_STATUS BatteryStatus = eBATTERY_REMOVED;
 #define TARGET_RESET_DELAY      100
 #define TARGET_POWERON_DELAY    100
 
+/* Battery Read 및 Display 주기 */
 #define PERIOD_LOOP_MILLIS      500
+/* Power off상태에서 LED display 주기 */
+#define PEROID_OFF_MILLIS       2000
+/* Power off시 배터리 잔량 LED표시 시간 */
+#define POWEROFF_LED_DELAY      100
 
 __xdata unsigned long MillisLoop        = 0;
 __xdata unsigned long BatteryVolt       = 0;
@@ -177,7 +198,6 @@ void    battery_level_display   (enum eBATTERY_STATUS bat_status, unsigned long 
 void    request_data_send       (char cmd);
 void    protocol_check          (void);
 void    repeat_data_check       (void);
-void    delay_ms                (unsigned long ms);
 
 void    target_system_reset     (void);
 void    target_system_power     (bool onoff);
@@ -189,9 +209,7 @@ void    loop                    ();
 /*---------------------------------------------------------------------------*/
 /* Debug Enable Flag */
 /*---------------------------------------------------------------------------*/
-/* Normal debug message */
-// #define __DEBUG__
-
+/* for Battery discharge graph */
 //#define _DEBUG_LOG_
 #if defined (_DEBUG_LOG_)
     #define PERIOD_LOG_MILLIS   1000
@@ -205,10 +223,17 @@ void    loop                    ();
     */
 #endif
 
+/* Normal debug message */
+// #define __DEBUG__
+
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /* Target Watchdog GPIO Interrupt */
 /*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+#if !defined(PCB_REV_20230712)
+/*---------------------------------------------------------------------------*/
+
 volatile bool TargetWatchdogClear = false;
 
 /*---------------------------------------------------------------------------*/
@@ -222,6 +247,8 @@ void int0_callback()
 /*---------------------------------------------------------------------------*/
 #pragma restore
 
+/*---------------------------------------------------------------------------*/
+#endif
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 float battery_adc_volt_cal (void)
@@ -453,7 +480,7 @@ void protocol_check(void)
             char cmd  = Protocol[1], data = Protocol[2];
             /* cal period ms */
             unsigned long cal_period =
-                ((data > '9') && (data < '0')) ? 0 : (data - '0') * 1000;
+                ((data <= '9') && (data >= '0')) ? (data - '0') * 1000 : 0;
             unsigned long cur_millis = millis();
 
             switch (cmd) {
@@ -486,6 +513,14 @@ void protocol_check(void)
                         Firmware Version request
                     */
                     break;
+#if defined (__DEBUG__)
+                /* ups watchdog test */
+                case    'X':
+                        USBSerial_println("ups watchdog test");
+                        USBSerial_flush();
+                        delay(3000);
+                    break;
+#endif
                 default:
                     return;
             }
@@ -533,19 +568,11 @@ void repeat_data_check(void)
 }
 
 /*---------------------------------------------------------------------------*/
-void delay_ms (unsigned long ms)
-{
-    unsigned int cur_mills = millis();
-
-    while ((cur_mills + ms) > millis())  delay(1);
-
-}
-/*---------------------------------------------------------------------------*/
 void target_system_reset (void)
 {
     pinMode (PORT_CTL_RESET, OUTPUT);   digitalWrite (PORT_CTL_RESET, 1);
 
-    delay_ms(TARGET_RESET_DELAY);
+    delay (TARGET_RESET_DELAY);
 
     pinMode (PORT_CTL_RESET, INPUT);
 
@@ -558,11 +585,11 @@ void target_system_power (bool onoff)
     if (onoff) {
         pinMode (PORT_CTL_POWER, INPUT);
 
-        delay_ms(TARGET_POWERON_DELAY);
+        delay (TARGET_POWERON_DELAY);
 
         pinMode (PORT_CTL_POWER, OUTPUT);   digitalWrite (PORT_CTL_POWER, 1);
 
-        delay_ms(TARGET_POWERON_DELAY);
+        delay (TARGET_POWERON_DELAY);
 
         pinMode (PORT_CTL_POWER, INPUT);
 
@@ -573,6 +600,7 @@ void target_system_power (bool onoff)
 
         USBSerial_println ("Target system force power off...");
     }
+    TargetPowerStatus = onoff;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -606,8 +634,10 @@ void setup()
     target_system_power (false);
 
     /* for target watchdog (P3.2 INT0), Only falling trigger */
+#if !defined(PCB_REV_20230712)
     attachInterrupt(0, int0_callback, FALLING);
     detachInterrupt(0);
+#endif
 
     /* 충분한 배터리가 있는지 확인 후 전원 ON */
     /* 500ms 마다 Battery Level일 일정 Level이상인지 확인 */
@@ -615,17 +645,24 @@ void setup()
         if (battery_avr_volt(battery_status()) > BAT_LEVEL_LV1)
             break;
 
-        delay_ms(PERIOD_LOOP_MILLIS);
+        delay (PERIOD_LOOP_MILLIS);
     }
 
     /* Target Power On */
     target_system_power(true);
-    TargetPowerStatus = true;
+
+    /* ups system watchdog enable */
+    GLOBAL_CFG_UNLOCK();
+    WDT_ENABLE();
+    WDT_CLR();
 }
 
 /*---------------------------------------------------------------------------*/
 void loop()
 {
+    /* ups system watchdog */
+    WDT_CLR();
+
     if(MillisLoop + PERIOD_LOOP_MILLIS < millis()) {
         MillisLoop      = millis ();
         BatteryAdcVolt  = battery_adc_volt ();
@@ -650,19 +687,31 @@ void loop()
                 ((BatteryStatus == eBATTERY_CHARGING) ||
                  (BatteryStatus == eBATTERY_FULL))) {
                 if (BatteryAvrVolt > BAT_LEVEL_LV1) {
-                    target_system_power (true);
                     PowerOnEvent = false;
+                    target_system_power (true);
                 }
             }
+            /* LED on display 시간을 100ms만 표시 */
+            delay (POWEROFF_LED_DELAY);
+            digitalWrite(PORT_LED_LV4, 0);  digitalWrite(PORT_LED_LV3, 0);
+            digitalWrite(PORT_LED_LV2, 0);  digitalWrite(PORT_LED_LV1, 0);
+            /* main loop를 2000ms 후에 다시 진입하도록 Offset값을 추가 */
+            MillisLoop = millis() + PEROID_OFF_MILLIS;
+#if defined(__DEBUG__)
+            USBSerial_println(BatteryAvrVolt);
+            USBSerial_println(MillisLoop);
+#endif
         }
     }
 
     /* GPIO Trigger watchdog reset */
+#if !defined(PCB_REV_20230712)
     if (TargetWatchdogClear) {
         TargetWatchdogClear = false;
         /* updata watchdog time */
         MillisRequestWatchdogTime = millis();
     }
+#endif
     /* Serial message check */
     protocol_check();
 
