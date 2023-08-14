@@ -79,6 +79,8 @@ arduino-cli install 참조사이트(X86)
   vnproch55x -r 2 -t ch552 <fw_file.hex>HOST -> UPS (4 Bytes)									
 ```
 
+ **주의 : Firmware Download후 반드시 "stty -F /dev/ttyACM0 9600" 실행. 실행 없는 경우 UART접근시 reset되어짐.**
+
 ## Hex file 생성위치
 ```
   /tmp/arduino/sketches/***/ups_fw.hex
