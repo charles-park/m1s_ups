@@ -713,7 +713,7 @@ void loop()
 #endif
         } else {
             /* Battery Level이 3500mV보다 낮은 경우 강제로 Power off */
-            if (BAT_LEVEL_OFF > BatteryAvrVolt) {
+            if ((BAT_LEVEL_OFF > BatteryAvrVolt) && (BatteryStatus != eBATTERY_REMOVED)) {
                 USBSerial_println("Battery Level < 3400mV. Force Power Off...");
                 target_system_power (false);
             }
