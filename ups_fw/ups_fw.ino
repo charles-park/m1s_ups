@@ -13,7 +13,7 @@
 #include "include/ch5xx.h"
 
 /*---------------------------------------------------------------------------*/
-#define FW_VERSION  "V0_1"
+#define FW_VERSION  "V0-1"
 #define PCB_1_REV   20230712
 #define PCB_2_REV   20230804
 
@@ -419,9 +419,9 @@ void request_data_send(char cmd)
             break;
         case    'C':
             USBSerial_print((char)'F');
-            USBSerial_print((int) !LED_FULL_STATUS);
+            USBSerial_print((int) LED_FULL_STATUS);
             USBSerial_print((char)'C');
-            USBSerial_print((int) !LED_CHRG_STATUS);
+            USBSerial_print((int) LED_CHRG_STATUS);
             break;
         case    'W':
             if (PeriodRequestWatchdogTime)
@@ -430,7 +430,7 @@ void request_data_send(char cmd)
                 USBSerial_print("0000");
             break;
         case    'P':
-                USBSerial_print(" OFF");
+                USBSerial_print("-OFF");
             break;
         case    'F':
                 USBSerial_print(FW_VERSION);
