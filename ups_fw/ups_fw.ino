@@ -638,6 +638,10 @@ void setup()
 
     /* Battery sampling arrary 초기화 */
     battery_avr_volt (eBATTERY_REMOVED);
+    battery_avr_volt (battery_status ());
+
+    /* Power On Event활성화 */
+    PowerOnEvent = true;
 
     /* UPS System watchdog enable */
     GLOBAL_CFG_UNLOCK();
