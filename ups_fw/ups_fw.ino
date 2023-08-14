@@ -199,6 +199,7 @@ enum eBATTERY_STATUS battery_status (void);
 void    battery_level_display   (enum eBATTERY_STATUS bat_status, unsigned long bat_volt);
 void    request_data_send       (char cmd);
 void    protocol_check          (void);
+void    repeat_data_clear       (void);
 void    repeat_data_check       (void);
 
 void    target_system_reset     (void);
@@ -506,10 +507,7 @@ void protocol_check(void)
                 case    'P':
                     /* system watch dog & repeat flag all clear */
                     TargetPowerStatus = false;
-                    PeriodRequestBatteryLevel   = 0;    MillisRequestBatteryLevel   = 0;
-                    PeriodRequestBatteryVoltage = 0;    MillisRequestBatteryVoltage = 0;
-                    PeriodRequestChagerStatus   = 0;    MillisRequestChagerStatus   = 0;
-                    PeriodRequestWatchdogTime   = 0;    MillisRequestWatchdogTime   = 0;
+                    repeat_data_clear();
                     break;
                 case    'F':
                     /*
@@ -533,7 +531,16 @@ void protocol_check(void)
 }
 
 /*---------------------------------------------------------------------------*/
-void repeat_data_check(void)
+void repeat_data_clear (void)
+{
+    PeriodRequestBatteryLevel   = 0;    MillisRequestBatteryLevel   = 0;
+    PeriodRequestBatteryVoltage = 0;    MillisRequestBatteryVoltage = 0;
+    PeriodRequestChagerStatus   = 0;    MillisRequestChagerStatus   = 0;
+    PeriodRequestWatchdogTime   = 0;    MillisRequestWatchdogTime   = 0;
+}
+
+/*---------------------------------------------------------------------------*/
+void repeat_data_check (void)
 {
     unsigned long period;
 
@@ -636,6 +643,9 @@ void setup()
     detachInterrupt(0);
 #endif
 
+    /* Repeat flag 초기화 */
+    repeat_data_clear();
+
     /* Battery sampling arrary 초기화 */
     battery_avr_volt (eBATTERY_REMOVED);
     battery_avr_volt (battery_status ());
@@ -681,6 +691,7 @@ void loop()
                  (BatteryStatus == eBATTERY_FULL))) {
                 if (BatteryAvrVolt > BAT_LEVEL_BOOT) {
                     PowerOnEvent = false;
+                    repeat_data_clear();
                     target_system_power (true);
                 }
             }
