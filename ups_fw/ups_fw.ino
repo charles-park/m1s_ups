@@ -130,6 +130,14 @@ __xdata bool LED_CHRG_STATUS = false;
 __xdata bool LED_FULL_STATUS = false;
 
 /*---------------------------------------------------------------------------*/
+/* Battery level indicator LED status */
+/*---------------------------------------------------------------------------*/
+__xdata bool LED_LV1_STATUS = false;
+__xdata bool LED_LV2_STATUS = false;
+__xdata bool LED_LV3_STATUS = false;
+__xdata bool LED_LV4_STATUS = false;
+
+/*---------------------------------------------------------------------------*/
 /* Serial Protocol */
 /*---------------------------------------------------------------------------*/
 #define PROTOCOL_SIZE   4
@@ -395,6 +403,7 @@ void battery_level_display (enum eBATTERY_STATUS bat_status, unsigned long bat_v
                 DispBatVolt = bat_volt;
             break;
 
+        default:
         case eBATTERY_REMOVED:
             #if defined (__DEBUG__)
                 USBSerial_println("eBATTERY_REMOVED");
@@ -402,17 +411,24 @@ void battery_level_display (enum eBATTERY_STATUS bat_status, unsigned long bat_v
             DispBatVolt = 0;
             /* Battery error 상태에서는 LED4, LED1을 점멸하여 상태이상을 표시함 */
             digitalWrite(PORT_LED_LV4, BlinkStatus);
+            digitalWrite(PORT_LED_LV1, BlinkStatus);
             digitalWrite(PORT_LED_LV3, 0);
             digitalWrite(PORT_LED_LV2, 0);
-            digitalWrite(PORT_LED_LV1, BlinkStatus);
+            LED_LV4_STATUS = LED_LV1_STATUS = 1;
+            LED_LV3_STATUS = LED_LV2_STATUS = 0;
             return;
     }
 
     /* 일반적인 상태에서는 현재 battery level에 맞게 LED를 점등함.(점멸x) */
-    digitalWrite(PORT_LED_LV4, DispBatVolt > BAT_LEVEL_LV4 ? 1 : 0);
-    digitalWrite(PORT_LED_LV3, DispBatVolt > BAT_LEVEL_LV3 ? 1 : 0);
-    digitalWrite(PORT_LED_LV2, DispBatVolt > BAT_LEVEL_LV2 ? 1 : 0);
-    digitalWrite(PORT_LED_LV1, DispBatVolt > BAT_LEVEL_LV1 ? 1 : 0);
+    LED_LV4_STATUS = DispBatVolt > BAT_LEVEL_LV4 ? 1 : 0;
+    LED_LV3_STATUS = DispBatVolt > BAT_LEVEL_LV3 ? 1 : 0;
+    LED_LV2_STATUS = DispBatVolt > BAT_LEVEL_LV2 ? 1 : 0;
+    LED_LV1_STATUS = DispBatVolt > BAT_LEVEL_LV1 ? 1 : 0;
+
+    digitalWrite(PORT_LED_LV4, LED_LV4_STATUS);
+    digitalWrite(PORT_LED_LV3, LED_LV3_STATUS);
+    digitalWrite(PORT_LED_LV2, LED_LV2_STATUS);
+    digitalWrite(PORT_LED_LV1, LED_LV1_STATUS);
 
     /* 배터리 방전상태에서는 현재 배터리 잔량위치의 LED 점멸함 */
     if (bat_status == eBATTERY_DISCHARGING) {
@@ -434,10 +450,8 @@ void request_data_send(char cmd)
     USBSerial_print(cmd);
     switch(cmd) {
         case    'L':
-            USBSerial_print(digitalRead(PORT_LED_LV4));
-            USBSerial_print(digitalRead(PORT_LED_LV3));
-            USBSerial_print(digitalRead(PORT_LED_LV2));
-            USBSerial_print(digitalRead(PORT_LED_LV1));
+            USBSerial_print((int)LED_LV4_STATUS);   USBSerial_print((int)LED_LV3_STATUS);
+            USBSerial_print((int)LED_LV2_STATUS);   USBSerial_print((int)LED_LV1_STATUS);
             break;
         case    'V':
             /* Battery자리수가 4자리가 아닌 경우 Battery Error */
@@ -578,6 +592,7 @@ void repeat_data_check (void)
         period = MillisRequestWatchdogTime + PeriodRequestWatchdogTime;
         if (period < millis()) {
             PeriodRequestWatchdogTime = 0;
+            USBSerial_println ("Target watchdog Overflow event...");
             target_system_reset ();
         }
     }
@@ -599,7 +614,7 @@ void target_system_power (bool onoff)
     if (onoff) {
         digitalWrite (PORT_CTL_POWER, 0);
 
-        target_system_reset ();
+        digitalWrite (PORT_CTL_RESET, 0);
 
         USBSerial_println ("Target system power on...");
     } else {
@@ -611,6 +626,8 @@ void target_system_power (bool onoff)
         USBSerial_println ("Target system force power off...");
     }
     TargetPowerStatus = onoff;
+    /* F/W Update시 기존 상태를 복원하기 위하여 사용함. */
+    RESET_KEEP = onoff;
     USBSerial_flush ();
 }
 
@@ -620,18 +637,21 @@ void port_init(void)
     pinMode(PORT_BAT_ADC,  INPUT);
     pinMode(PORT_LED_CHRG, INPUT_PULLUP);
     pinMode(PORT_LED_FULL, INPUT_PULLUP);
+    LED_CHRG_STATUS = 0;    LED_FULL_STATUS = 0;
 
-    pinMode(PORT_CTL_RESET, OUTPUT);    digitalWrite(PORT_CTL_RESET, 1);
-    pinMode(PORT_CTL_POWER, OUTPUT);    digitalWrite(PORT_CTL_POWER, 1);
+    pinMode(PORT_CTL_RESET, OUTPUT);    digitalWrite(PORT_CTL_RESET, 0);
+    pinMode(PORT_CTL_POWER, OUTPUT);    digitalWrite(PORT_CTL_POWER, 0);
 
     /* Target GPIO Watchdog PIN */
     pinMode(PORT_WATCHDOG, INPUT);
 
     /* Battery level led all clear */
-    pinMode(PORT_LED_LV4, OUTPUT);      digitalWrite(PORT_LED_LV4, 0);
-    pinMode(PORT_LED_LV3, OUTPUT);      digitalWrite(PORT_LED_LV3, 0);
-    pinMode(PORT_LED_LV2, OUTPUT);      digitalWrite(PORT_LED_LV2, 0);
-    pinMode(PORT_LED_LV1, OUTPUT);      digitalWrite(PORT_LED_LV1, 0);
+    LED_LV4_STATUS = 0;     LED_LV3_STATUS = 0;
+    LED_LV2_STATUS = 0;     LED_LV1_STATUS = 0;
+    pinMode(PORT_LED_LV4, OUTPUT);      digitalWrite(PORT_LED_LV4, LED_LV4_STATUS);
+    pinMode(PORT_LED_LV3, OUTPUT);      digitalWrite(PORT_LED_LV3, LED_LV3_STATUS);
+    pinMode(PORT_LED_LV2, OUTPUT);      digitalWrite(PORT_LED_LV2, LED_LV2_STATUS);
+    pinMode(PORT_LED_LV1, OUTPUT);      digitalWrite(PORT_LED_LV1, LED_LV1_STATUS);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -640,8 +660,14 @@ void setup()
     /* UPS GPIO Port Init */
     port_init();
 
-    /* 일정 Battery Level 확인 전 까지 Target system Power off */
-    target_system_power (false);
+    /* Reset flag를 검사하여 F/W 업데이트의 경우 시스템 reset을 하지 않도록 함. */
+    if ((PCON & MASK_RST_FLAG) == RST_FLAG_POR)
+        /* 일정 Battery Level 확인 전 까지 Target system Power off */
+        target_system_power (false);
+    else
+        /* F/W업데이트시 기존 POWER 상태 복원 */
+        if (RESET_KEEP)
+            target_system_power (true);
 
     /* for target watchdog (P3.2 INT0), Only falling trigger */
 #if !defined(PCB_REV_20230712)
