@@ -16,7 +16,7 @@
 #define FW_VERSION  "V0-1"
 
 /* for 1st DEV board */
-#define PCB_REV_20230712
+//#define PCB_REV_20230712
 
 /*---------------------------------------------------------------------------*/
 /* UPS System watchdog control */
@@ -63,7 +63,7 @@
 /* Target Power / Reset control pin */
 /*---------------------------------------------------------------------------*/
 /* CH552 GPIO P3.6 */
-#define PORT_CTL_POWER  36
+#define PORT_CTL_POWER  34
 /* CH552 GPIO P3.3 */
 #define PORT_CTL_RESET  33
 
@@ -512,11 +512,11 @@ void protocol_check(void)
                 case    'W':
                     /* Target Power가 ON인 상태에서만 Watchdog control */
                     if (RESET_KEEP & RESET_KEEP_POWEROFF) {
-                        PeriodRequestWatchdogTime = cal_period;
-                        MillisRequestWatchdogTime = cur_millis;
-                    } else {
                         PeriodRequestWatchdogTime = 0;
                         MillisRequestWatchdogTime = 0;
+                    } else {
+                        PeriodRequestWatchdogTime = cal_period;
+                        MillisRequestWatchdogTime = cur_millis;
                     }
                     break;
                 case    'P':
@@ -529,7 +529,30 @@ void protocol_check(void)
                         Firmware Version request
                     */
                     break;
+
 #if defined (__DEBUG__)
+                /* GPIO Set Test */
+                case    'S':    case    's':
+                    if ((data == 'R') || (data == 'r')) {
+                        USBSerial_println("PORT_CTL_RESET Output(High)");
+                        pinMode (PORT_CTL_RESET, OUTPUT);   digitalWrite (PORT_CTL_RESET, 1);
+                    }
+                    if ((data == 'P') || (data == 'p')) {
+                        USBSerial_println("PORT_CTL_POWER Output(High)");
+                        pinMode (PORT_CTL_POWER, OUTPUT);   digitalWrite (PORT_CTL_POWER, 1);
+                    }
+                    return;
+                /* GPIO Reset Test */
+                case    'R':    case    'r':
+                    if ((data == 'R') || (data == 'r')) {
+                        USBSerial_println("PORT_CTL_RESET Input(Low)");
+                        pinMode (PORT_CTL_RESET, INPUT);
+                    }
+                    if ((data == 'P') || (data == 'p')) {
+                        USBSerial_println("PORT_CTL_POWER Input(Low)");
+                        pinMode (PORT_CTL_POWER, INPUT);
+                    }
+                    return;
                 /* ups watchdog test */
                 case    'X':
                         USBSerial_println("ups watchdog test");
@@ -598,13 +621,13 @@ void repeat_data_check (void)
 /*---------------------------------------------------------------------------*/
 void target_system_reset (void)
 {
-    pinMode (OUTPUT, PORT_CTL_RESET);
+    pinMode (PORT_CTL_RESET, OUTPUT);
     digitalWrite (PORT_CTL_RESET, 0);   delay (TARGET_RESET_DELAY);
     digitalWrite (PORT_CTL_RESET, 1);   delay (TARGET_RESET_DELAY);
     digitalWrite (PORT_CTL_RESET, 0);
 
 #if !defined(PCB_REV_20230712)
-    pinMode (INPUT, PORT_CTL_RESET);
+    pinMode (PORT_CTL_RESET, INPUT);
 #endif
 
 #if defined (__DEBUG__)
@@ -617,8 +640,9 @@ void target_system_power (bool onoff)
 {
     if (onoff) {
 #if !defined(PCB_REV_20230712)
-        pinMode (INPUT, PORT_CTL_POWER);
-        pinMode (INPUT, PORT_CTL_RESET);
+        /* target system force power off */
+        pinMode (PORT_CTL_POWER, INPUT);
+        pinMode (PORT_CTL_RESET, INPUT);
 #else
         digitalWrite (PORT_CTL_POWER, 0);
         digitalWrite (PORT_CTL_RESET, 0);
@@ -630,8 +654,8 @@ void target_system_power (bool onoff)
 #endif
     } else {
         /* target system force power off */
-        pinMode (OUTPUT, PORT_CTL_POWER);   digitalWrite (PORT_CTL_POWER, 1);
-        pinMode (OUTPUT, PORT_CTL_RESET);   digitalWrite (PORT_CTL_RESET, 1);
+        pinMode (PORT_CTL_POWER, OUTPUT);   digitalWrite (PORT_CTL_POWER, 1);
+        pinMode (PORT_CTL_RESET, OUTPUT);   digitalWrite (PORT_CTL_RESET, 1);
 
 #if defined (__DEBUG__)
         USBSerial_println ("Target system force power off...");
@@ -650,8 +674,8 @@ void port_init(void)
     LED_CHRG_STATUS = 0;    LED_FULL_STATUS = 0;
 
 #if !defined(PCB_REV_20230712)
-    pinMode (INPUT, PORT_CTL_POWER);
-    pinMode (INPUT, PORT_CTL_RESET);
+    pinMode (PORT_CTL_POWER, INPUT);
+    pinMode (PORT_CTL_RESET, INPUT);
 #else
     pinMode(PORT_CTL_RESET, OUTPUT);    digitalWrite(PORT_CTL_RESET, 0);
     pinMode(PORT_CTL_POWER, OUTPUT);    digitalWrite(PORT_CTL_POWER, 0);
@@ -727,7 +751,6 @@ void loop()
 
         battery_level_display (BatteryStatus, BatteryAvrVolt);
         repeat_data_check();
-
         /* Target Power Off status */
         if (RESET_KEEP & RESET_KEEP_POWEROFF) {
             /*

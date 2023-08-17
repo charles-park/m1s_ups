@@ -24,7 +24,8 @@ BAT_LEVEL_LV2="3650"
 BAT_LEVEL_LV1="3550"
 
 #/* System force power level */
-POWER_OFF_VOLT=${BAT_LEVEL_LV3}
+#POWER_OFF_VOLT=${BAT_LEVEL_LV3}
+POWER_OFF_VOLT=${BAT_LEVEL_LV4}
 
 #/*---------------------------------------------------------------------------*/
 #/*---------------------------------------------------------------------------*/
@@ -139,7 +140,7 @@ function system_poweroff {
 	echo "run poweroff command..."
 	echo "------------------------------------------------------------"
 	# poweroff
-	# exit 0
+	exit 0
 }
 
 #/*---------------------------------------------------------------------------*/
@@ -181,6 +182,7 @@ do
 	read_ups_status
 	date
 	check_ups_status
+	echo "Power OFF Volt = ${POWER_OFF_VOLT} mV"
 	echo "------------------------------------------------------------"
 done
 
