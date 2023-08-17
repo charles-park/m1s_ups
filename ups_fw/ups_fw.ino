@@ -26,6 +26,10 @@
 #define WDT_DISABLE()           ( GLOBAL_CFG &= ~bWDOG_EN )
 #define WDT_CLR()               ( WDOG_COUNT  = 0 )
 
+/* RESET_KEEP Register를 사용하여 Power state관리. */
+#define RESET_KEEP_POWERON  0x80
+#define RESET_KEEP_POWEROFF 0x40
+
 /*---------------------------------------------------------------------------*/
 /* TC4056A Charger status check pin */
 /*---------------------------------------------------------------------------*/
@@ -149,7 +153,7 @@ __xdata char Protocol[PROTOCOL_SIZE];
 /* Battery Status */
 /*---------------------------------------------------------------------------*/
 enum {
-    eBATTERY_DISCHARGING,
+    eBATTERY_DISCHARGING = 1,
     eBATTERY_CHARGING,
     eBATTERY_FULL,
     eBATTERY_REMOVED,
@@ -192,12 +196,6 @@ __xdata unsigned long MillisRequestChagerStatus   = 0;
 /*---------------------------------------------------------------------------*/
 __xdata unsigned long PeriodRequestWatchdogTime = 0;
 __xdata unsigned long MillisRequestWatchdogTime = 0;
-
-/*---------------------------------------------------------------------------*/
-/* Target Power Status */
-/*---------------------------------------------------------------------------*/
-__xdata bool TargetPowerStatus = false;
-__xdata bool PowerOnEvent = false;
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -472,6 +470,7 @@ void request_data_send(char cmd)
             break;
         case    'P':
                 USBSerial_print("-OFF");
+                RESET_KEEP = BatteryStatus | RESET_KEEP_POWEROFF;
             break;
         case    'F':
                 USBSerial_print(FW_VERSION);
@@ -512,7 +511,7 @@ void protocol_check(void)
                     break;
                 case    'W':
                     /* Target Power가 ON인 상태에서만 Watchdog control */
-                    if (TargetPowerStatus) {
+                    if (RESET_KEEP & RESET_KEEP_POWEROFF) {
                         PeriodRequestWatchdogTime = cal_period;
                         MillisRequestWatchdogTime = cur_millis;
                     } else {
@@ -522,7 +521,7 @@ void protocol_check(void)
                     break;
                 case    'P':
                     /* system watch dog & repeat flag all clear */
-                    TargetPowerStatus = false;
+                    RESET_KEEP |= RESET_KEEP_POWEROFF;
                     repeat_data_clear();
                     break;
                 case    'F':
@@ -624,6 +623,7 @@ void target_system_power (bool onoff)
         digitalWrite (PORT_CTL_POWER, 0);
         digitalWrite (PORT_CTL_RESET, 0);
 #endif
+        RESET_KEEP &= ~(RESET_KEEP_POWEROFF);
 
 #if defined (__DEBUG__)
         USBSerial_println ("Target system power on...");
@@ -636,10 +636,8 @@ void target_system_power (bool onoff)
 #if defined (__DEBUG__)
         USBSerial_println ("Target system force power off...");
 #endif
+        RESET_KEEP |=  (RESET_KEEP_POWEROFF);
     }
-    TargetPowerStatus = onoff;
-    /* F/W Update시 기존 상태를 복원하기 위하여 사용함. */
-    RESET_KEEP = onoff;
     USBSerial_flush ();
 }
 
@@ -677,14 +675,22 @@ void setup()
     /* UPS GPIO Port Init */
     port_init();
 
+    /* USB Serial init */
+    USBSerial_flush();
+
     /* Reset flag를 검사하여 F/W 업데이트의 경우 시스템 reset을 하지 않도록 함. */
-    if ((PCON & MASK_RST_FLAG) == RST_FLAG_POR)
+    if (RESET_KEEP == 0) {
         /* 일정 Battery Level 확인 전 까지 Target system Power off */
         target_system_power (false);
-    else
+        /* Power On Event활성화 */
+        RESET_KEEP |=  (RESET_KEEP_POWERON);
+    } else {
         /* F/W업데이트시 기존 POWER 상태 복원 */
-        if (RESET_KEEP)
+        if ((RESET_KEEP & RESET_KEEP_POWEROFF) == 0)
             target_system_power (true);
+        /* Power On Event clear */
+        RESET_KEEP &= ~(RESET_KEEP_POWERON);
+    }
 
     /* for target watchdog (P3.2 INT0), Only falling trigger */
 #if !defined(PCB_REV_20230712)
@@ -698,9 +704,6 @@ void setup()
     /* Battery sampling arrary 초기화 */
     battery_avr_volt (eBATTERY_REMOVED);
     battery_avr_volt (battery_status ());
-
-    /* Power On Event활성화 */
-    PowerOnEvent = true;
 
     /* UPS System watchdog enable */
     GLOBAL_CFG_UNLOCK();
@@ -726,22 +729,40 @@ void loop()
         repeat_data_check();
 
         /* Target Power Off status */
-        if (!TargetPowerStatus) {
+        if (RESET_KEEP & RESET_KEEP_POWEROFF) {
             /*
                 Target의 Battery Status가 Discharging에서 Charging으로 바뀐경우
                 USB Cable을 재 접속한 것이므로 Power On Event를 활성화 시키고,
-                바로 꺼짐을 방지하기 위하여 Battery Level > 1 인 경우에 Power On을 시킨다.
-            */
-            if (BatteryStatus == eBATTERY_DISCHARGING)
-                PowerOnEvent = true;
+                바로 꺼짐을 방지하기 위하여 BAT_LEVEL_BOOT 전압보다 큰 경우에 Power On을 시킨다.
 
-            if (PowerOnEvent &&
-                ((BatteryStatus == eBATTERY_CHARGING) ||
-                 (BatteryStatus == eBATTERY_FULL))) {
-                if (BatteryAvrVolt > BAT_LEVEL_BOOT) {
-                    PowerOnEvent = false;
-                    repeat_data_clear();
-                    target_system_power (true);
+                처음 Power On booting시 PowerOnEvent는 true상태이며 Main loop에서 Battery Level확인 후
+                Power On을 시킨다.
+
+                RESET_KEEP Register는 Power On reset이 아닌 경우 계속하여 기존의 값을 유지하고 있으므로
+                기존 상태의 Battery Status를 기록하여 Battery상태의 변화를 감지하여 Power On Event를 생성하거나
+                F/W update후 reset상태에서도 기존의 UPS상태를 유지하기 위하여 사용한다.
+            */
+            unsigned char OldBatteryStatus = RESET_KEEP & ~(RESET_KEEP_POWEROFF | RESET_KEEP_POWERON);
+
+            if ((BatteryStatus != eBATTERY_REMOVED) && (OldBatteryStatus != BatteryStatus)) {
+
+                RESET_KEEP = (RESET_KEEP | BatteryStatus | RESET_KEEP_POWEROFF);
+
+                /* Discharge -> Charging 2초안에 이루어지는 경우 detect를 하지 못하는 경우 발생함. */
+                /* 기본적으로 2초 주기로 검사하기 때문에 발생하는 문제임. */
+                switch (BatteryStatus) {
+                    case    eBATTERY_CHARGING:
+                    case    eBATTERY_FULL:
+                        RESET_KEEP |= RESET_KEEP_POWERON;
+                    case    eBATTERY_DISCHARGING:
+                        if (RESET_KEEP & RESET_KEEP_POWERON) {
+                            if (BatteryAvrVolt > BAT_LEVEL_BOOT) {
+                                RESET_KEEP &= ~(RESET_KEEP_POWERON);
+                                repeat_data_clear();
+                                target_system_power (true);
+                            }
+                        }
+                    break;
                 }
             }
             /* LED on display 시간을 100ms만 표시 */
@@ -751,7 +772,7 @@ void loop()
             /* main loop를 2000ms 후에 다시 진입하도록 Offset값을 추가 */
             MillisLoop = millis() + PEROID_OFF_MILLIS;
         } else {
-            /* Battery Level이 3500mV보다 낮은 경우 강제로 Power off */
+            /* Battery Level이 3400mV보다 낮은 경우 강제로 Power off */
             if ((BAT_LEVEL_OFF > BatteryAvrVolt) && (BatteryStatus != eBATTERY_REMOVED)) {
 #if defined(__DEBUG__)
                 USBSerial_println("Battery Level < 3400mV. Force Power Off...");
