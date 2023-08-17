@@ -15,8 +15,8 @@
 /*---------------------------------------------------------------------------*/
 #define FW_VERSION  "V0-1"
 
+/* for 1st DEV board */
 #define PCB_REV_20230712
-//#define PCB_REV_20230810
 
 /*---------------------------------------------------------------------------*/
 /* UPS System watchdog control */
@@ -175,7 +175,9 @@ __xdata unsigned long BatteryVolt       = 0;
 __xdata unsigned long BatteryAvrVolt    = 0;
 __xdata unsigned long BatteryAdcVolt    = 0;
 
+/*---------------------------------------------------------------------------*/
 /* Auto repeat data control */
+/*---------------------------------------------------------------------------*/
 __xdata unsigned long PeriodRequestBatteryLevel   = 0;
 __xdata unsigned long MillisRequestBatteryLevel   = 0;
 
@@ -185,11 +187,15 @@ __xdata unsigned long MillisRequestBatteryVoltage = 0;
 __xdata unsigned long PeriodRequestChagerStatus   = 0;
 __xdata unsigned long MillisRequestChagerStatus   = 0;
 
+/*---------------------------------------------------------------------------*/
 /* Target reset(watchdog) control */
+/*---------------------------------------------------------------------------*/
 __xdata unsigned long PeriodRequestWatchdogTime = 0;
 __xdata unsigned long MillisRequestWatchdogTime = 0;
 
+/*---------------------------------------------------------------------------*/
 /* Target Power Status */
+/*---------------------------------------------------------------------------*/
 __xdata bool TargetPowerStatus = false;
 __xdata bool PowerOnEvent = false;
 
@@ -220,9 +226,9 @@ void    loop                    ();
 /*---------------------------------------------------------------------------*/
 /* Debug Enable Flag */
 /*---------------------------------------------------------------------------*/
-/* for Battery discharge graph */
-//#define _DEBUG_LOG_
-#if defined (_DEBUG_LOG_)
+//#define __DEBUG_LOG__
+#if defined (__DEBUG_LOG__)
+    /* for Battery discharge graph (log) */
     #define PERIOD_LOG_MILLIS   1000
     __xdata unsigned long MillisLog = 0;
     __xdata unsigned long LogCount = 0;
@@ -232,10 +238,10 @@ void    loop                    ();
             USBSerial_println()
         #endif
     */
+#else
+    /* Normal debug message */
+    //#define __DEBUG__
 #endif
-
-/* Normal debug message */
-// #define __DEBUG__
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -345,7 +351,7 @@ enum eBATTERY_STATUS battery_status (void)
 
     if (!LED_FULL_STATUS) {
         /* Battery remove상태에서는 FULL은 0이고 CHRG는 Pulse 값을 가짐 */
-        /* CHRG값이 0으로 떨어지는지 확인하여 Battery remove상태인지 확인함 (200ms). */
+        /* CHRG값이 0으로 떨어지는지 확인하여 Battery remove상태인지 확인함 (300ms). */
         unsigned long check_mills = millis();
         while (millis() < (check_mills + 300)) {
             if (!digitalRead(PORT_LED_CHRG)) {
@@ -353,8 +359,10 @@ enum eBATTERY_STATUS battery_status (void)
                 break;
             }
         }
+#if defined (__DEBUG__)
         if (!LED_CHRG_STATUS)
             USBSerial_println("Battery Removed...");
+#endif
     }
 
     if      ( LED_CHRG_STATUS &&  LED_FULL_STATUS)
@@ -382,22 +390,13 @@ void battery_level_display (enum eBATTERY_STATUS bat_status, unsigned long bat_v
 
     switch (bat_status) {
         case eBATTERY_DISCHARGING:
-            #if defined (__DEBUG__)
-                USBSerial_println("eBATTERY_DISCHARGING");
-            #endif
             /* 전압이 낮아지는 경우에만 업데이트 */
             if (DispBatVolt > bat_volt)
                 DispBatVolt = bat_volt;
             break;
 
         case eBATTERY_FULL:
-            #if defined (__DEBUG__)
-                USBSerial_println("eBATTERY_FULL");
-            #endif
         case eBATTERY_CHARGING:
-            #if defined (__DEBUG__)
-                USBSerial_println("eBATTERY_CHARGING");
-            #endif
             /* 전압이 높아지는 경우에만 업데이트 */
             if (DispBatVolt < bat_volt)
                 DispBatVolt = bat_volt;
@@ -405,9 +404,6 @@ void battery_level_display (enum eBATTERY_STATUS bat_status, unsigned long bat_v
 
         default:
         case eBATTERY_REMOVED:
-            #if defined (__DEBUG__)
-                USBSerial_println("eBATTERY_REMOVED");
-            #endif
             DispBatVolt = 0;
             /* Battery error 상태에서는 LED4, LED1을 점멸하여 상태이상을 표시함 */
             digitalWrite(PORT_LED_LV4, BlinkStatus);
@@ -592,7 +588,9 @@ void repeat_data_check (void)
         period = MillisRequestWatchdogTime + PeriodRequestWatchdogTime;
         if (period < millis()) {
             PeriodRequestWatchdogTime = 0;
+#if defined (__DEBUG__)
             USBSerial_println ("Target watchdog Overflow event...");
+#endif
             target_system_reset ();
         }
     }
@@ -601,29 +599,43 @@ void repeat_data_check (void)
 /*---------------------------------------------------------------------------*/
 void target_system_reset (void)
 {
+    pinMode (OUTPUT, PORT_CTL_RESET);
     digitalWrite (PORT_CTL_RESET, 0);   delay (TARGET_RESET_DELAY);
     digitalWrite (PORT_CTL_RESET, 1);   delay (TARGET_RESET_DELAY);
     digitalWrite (PORT_CTL_RESET, 0);
 
+#if !defined(PCB_REV_20230712)
+    pinMode (INPUT, PORT_CTL_RESET);
+#endif
+
+#if defined (__DEBUG__)
     USBSerial_println ("Target system reset...");
+#endif
 }
 
 /*---------------------------------------------------------------------------*/
 void target_system_power (bool onoff)
 {
     if (onoff) {
+#if !defined(PCB_REV_20230712)
+        pinMode (INPUT, PORT_CTL_POWER);
+        pinMode (INPUT, PORT_CTL_RESET);
+#else
         digitalWrite (PORT_CTL_POWER, 0);
-
         digitalWrite (PORT_CTL_RESET, 0);
+#endif
 
+#if defined (__DEBUG__)
         USBSerial_println ("Target system power on...");
+#endif
     } else {
         /* target system force power off */
-        digitalWrite (PORT_CTL_POWER, 1);
+        pinMode (OUTPUT, PORT_CTL_POWER);   digitalWrite (PORT_CTL_POWER, 1);
+        pinMode (OUTPUT, PORT_CTL_RESET);   digitalWrite (PORT_CTL_RESET, 1);
 
-        digitalWrite (PORT_CTL_RESET, 1);
-
+#if defined (__DEBUG__)
         USBSerial_println ("Target system force power off...");
+#endif
     }
     TargetPowerStatus = onoff;
     /* F/W Update시 기존 상태를 복원하기 위하여 사용함. */
@@ -639,8 +651,13 @@ void port_init(void)
     pinMode(PORT_LED_FULL, INPUT_PULLUP);
     LED_CHRG_STATUS = 0;    LED_FULL_STATUS = 0;
 
+#if !defined(PCB_REV_20230712)
+    pinMode (INPUT, PORT_CTL_POWER);
+    pinMode (INPUT, PORT_CTL_RESET);
+#else
     pinMode(PORT_CTL_RESET, OUTPUT);    digitalWrite(PORT_CTL_RESET, 0);
     pinMode(PORT_CTL_POWER, OUTPUT);    digitalWrite(PORT_CTL_POWER, 0);
+#endif
 
     /* Target GPIO Watchdog PIN */
     pinMode(PORT_WATCHDOG, INPUT);
@@ -733,14 +750,12 @@ void loop()
             digitalWrite(PORT_LED_LV2, 0);  digitalWrite(PORT_LED_LV1, 0);
             /* main loop를 2000ms 후에 다시 진입하도록 Offset값을 추가 */
             MillisLoop = millis() + PEROID_OFF_MILLIS;
-#if defined(__DEBUG__)
-            USBSerial_println(BatteryAvrVolt);
-            USBSerial_println(MillisLoop);
-#endif
         } else {
             /* Battery Level이 3500mV보다 낮은 경우 강제로 Power off */
             if ((BAT_LEVEL_OFF > BatteryAvrVolt) && (BatteryStatus != eBATTERY_REMOVED)) {
+#if defined(__DEBUG__)
                 USBSerial_println("Battery Level < 3400mV. Force Power Off...");
+#endif
                 target_system_power (false);
             }
         }
@@ -752,15 +767,12 @@ void loop()
         TargetWatchdogClear = false;
         /* updata watchdog time */
         MillisRequestWatchdogTime = millis();
-#if defined (__DEBUG__)
-        USBSerial_println("TARGET Watchdog reset (GPIO Irq0)");
-#endif
     }
 #endif
     /* Serial message check */
     protocol_check();
 
-#if defined (_DEBUG_LOG_)
+#if defined (__DEBUG_LOG__)
     /* for battery discharge graph */
     if (MillisLog + PERIOD_LOG_MILLIS < millis()) {
         MillisLog = millis ();
