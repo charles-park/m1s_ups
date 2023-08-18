@@ -1,0 +1,28 @@
+#
+# Register service (requires root permission)
+#
+#    Copy the *.service files to /etc/systemd/system/.(m1s_ups.service)
+#
+#    service registration(run) : sudo systemctl enable {service name}
+#    service release(stop)     : sudo systemctl disable {service name}
+#
+Description=Check the M1S_UPS status
+
+After=syslog.target
+
+[Service]
+Type=simple
+
+# login account
+User=root
+
+# working directory
+WorkingDirectory=/root/m1s_ups
+
+ExecStart=/bin/bash ./check_ups.sh
+ExecStartPre=/bin/sleep 1
+
+[Install]
+WantedBy=multi-user.target
+#WantedBy=default.target
+
