@@ -88,7 +88,7 @@
 #endif
 
 /* ADC 8 bits (256). mV resolution value */
-#define MICOM_ADC_RES   255
+#define MICOM_ADC_RES   256
 /* R9(1.2K) */
 #define BAT_ADC_R1      1200
 /* R10(20K) */
@@ -105,8 +105,14 @@
 /* Battery level이 3400mV보다 작은 경우 강제로 system power off */
 #define BAT_LEVEL_OFF   3400
 
+/*---------------------------------------------------------------------------*/
 /* booting을 위한 최소 battery level 설정 */
-#define BAT_LEVEL_BOOT  BAT_LEVEL_LV2
+/* Set battery level for system power on */
+/* Power on when battery charge condition detected.(default) */
+/* 0     : Detect charging status.(default) */
+/* 1 ~ 9 : BATTERY LEVEL */
+/*---------------------------------------------------------------------------*/
+__xdata unsigned long BatteryBootVolt = 0;
 
 /*---------------------------------------------------------------------------*/
 /* ADC Raw 샘플 갯수. 샘플 갯수중 최대값, 최소값을 제외한 평균값은 ADC값으로 사용한다. */
@@ -524,6 +530,21 @@ void protocol_check(void)
                     RESET_KEEP |= RESET_KEEP_POWEROFF;
                     repeat_data_clear();
                     break;
+                case    'O':
+                    /*---------------------------------------------------------------------------*/
+                    /* Set battery level for system power on */
+                    /* Power on when battery charge condition detected.(default) */
+                    /* 0     : Detect charging status.(default) */
+                    /* 1 ~ 9 : BATTERY LEVEL */
+                    /*---------------------------------------------------------------------------*/
+                    switch (data) {
+                        case    '1':    BatteryBootVolt = BAT_LEVEL_LV1;    break;
+                        case    '2':    BatteryBootVolt = BAT_LEVEL_LV2;    break;
+                        case    '3':    BatteryBootVolt = BAT_LEVEL_LV3;    break;
+                        case    '4':    BatteryBootVolt = BAT_LEVEL_LV4;    break;
+                        default:        BatteryBootVolt = 0;                break;
+                    }
+                    break;
                 case    'F':
                     /*
                         Firmware Version request
@@ -704,6 +725,8 @@ void setup()
 
     /* Reset flag를 검사하여 F/W 업데이트의 경우 시스템 reset을 하지 않도록 함. */
     if (RESET_KEEP == 0) {
+        /* 처음 power on시에는 charging 상태에서도 켜지게 함. */
+        BatteryBootVolt = 0;
         /* 일정 Battery Level 확인 전 까지 Target system Power off */
         target_system_power (false);
         /* Power On Event활성화 */
@@ -756,10 +779,13 @@ void loop()
             /*
                 Target의 Battery Status가 Discharging에서 Charging으로 바뀐경우
                 USB Cable을 재 접속한 것이므로 Power On Event를 활성화 시키고,
-                바로 꺼짐을 방지하기 위하여 BAT_LEVEL_BOOT 전압보다 큰 경우에 Power On을 시킨다.
+                바로 꺼짐을 방지하기 위하여 BatteryBootVolt 전압보다 큰 경우에 Power On을 시킨다.
 
-                처음 Power On booting시 PowerOnEvent는 true상태이며 Main loop에서 Battery Level확인 후
+                처음 Power On booting시 PowerOnEvent는 true상태이며 Main loop에서 BatteryBootVolt확인 후
                 Power On을 시킨다.
+
+                Power on reset의 경우 초기 BatteryBootVolt = 0으로 charging모드의 경우 바로 켜지도록 하며
+                차후 command를 통하여 두번째 power on부터는 BatteryBootVolt를 적용하도록 한다.
 
                 RESET_KEEP Register는 Power On reset이 아닌 경우 계속하여 기존의 값을 유지하고 있으므로
                 기존 상태의 Battery Status를 기록하여 Battery상태의 변화를 감지하여 Power On Event를 생성하거나
@@ -779,7 +805,7 @@ void loop()
                         RESET_KEEP |= RESET_KEEP_POWERON;
                     case    eBATTERY_DISCHARGING:
                         if (RESET_KEEP & RESET_KEEP_POWERON) {
-                            if (BatteryAvrVolt > BAT_LEVEL_BOOT) {
+                            if (BatteryAvrVolt > BatteryBootVolt) {
                                 RESET_KEEP &= ~(RESET_KEEP_POWERON);
                                 repeat_data_clear();
                                 target_system_power (true);

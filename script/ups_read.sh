@@ -22,6 +22,7 @@ BATTERY_LEVEL_LV0="3400"
 #/* BATERRY_LEVEL_FULL : Power off when battery discharge condition detected. */
 #/*---------------------------------------------------------------------------*/
 CONFIG_POWEROFF_BATTERY_LEVEL=${BATTERY_LEVEL_FULL}
+# CONFIG_POWEROFF_BATTERY_LEVEL=${BATTERY_LEVEL_LV4}
 
 #/*---------------------------------------------------------------------------*/
 #/* Set battery level for system power on */
@@ -29,7 +30,8 @@ CONFIG_POWEROFF_BATTERY_LEVEL=${BATTERY_LEVEL_FULL}
 # 0     : Detect charging status.(default)
 # 1 ~ 9 : BATTERY LEVEL
 #/*---------------------------------------------------------------------------*/
-CONFIG_UPS_ON_BATTERY_LEVEL=""
+CONFIG_UPS_ON_BATTERY_LEVEL="0"
+# CONFIG_UPS_ON_BATTERY_LEVEL="4"
 
 #/*---------------------------------------------------------------------------*/
 #/* Set watchdog reset time */
@@ -202,8 +204,7 @@ function check_ups_status {
 
 	#/* UPS Status : Discharging... */
 	if [ ${UPS_STATUS_CHRG} -eq "1" -a ${UPS_STATUS_FULL} -eq "1" ]; then
-		echo "UPS Battery Status : Discharging..."
-		echo "UPS Battery Volt = ${UPS_BATTERY_VOLT} mV"
+		echo "UPS Battery Status (Discharging...)"
 
 		#/* UPS Battery Status : Low Battery */
 		if [ ${UPS_BATTERY_VOLT} -lt ${CONFIG_POWEROFF_BATTERY_LEVEL} ]; then
@@ -214,23 +215,27 @@ function check_ups_status {
 				echo "------------------------------------------------------------"
 			else
 				echo "------------------------------------------------------------"
-				echo "Power off when UPS_BATTERY_VOLT is lower than POWER_OFF_VOLT."
+				echo "UPS Battery Volt : ${UPS_BATTERY_VOLT} mV"
+				echo "UPS Battery Volt is lower then ${CONFIG_POWEROFF_BATTERY_LEVEL} mV"
 				echo "------------------------------------------------------------"
 			fi
 			system_poweroff
 		fi
 	else
 		if [ ${UPS_STATUS_CHRG} -eq "0" ]; then
-			echo "UPS Battery Status : Charging..."
+			echo "UPS Battery Status (Charging...)"
 		else
-			echo "UPS Battery Status : Full Charged."
+			echo "UPS Battery Status (Full Charged..)"
 		fi
 
-		if [ ${CONFIG_POWEROFF_BATTERY_LEVEL} -eq ${BATTERY_LEVEL_FULL} ]; then
-			echo "UPS Power OFF : Detecting UPS battery discharge."
-		else
-			echo "UPS Power OFF : Battery Volt = ${CONFIG_POWEROFF_BATTERY_LEVEL} mV"
-		fi
+	fi
+
+	echo "UPS Battery Volt : ${UPS_BATTERY_VOLT} mV"
+
+	if [ ${CONFIG_POWEROFF_BATTERY_LEVEL} -eq ${BATTERY_LEVEL_FULL} ]; then
+		echo "SYSTEM Power OFF : Detecting UPS battery discharge."
+	else
+		echo "SYSTEM Power OFF : UPS Battery Volt is lower then ${CONFIG_POWEROFF_BATTERY_LEVEL} mV"
 	fi
 }
 
@@ -244,7 +249,7 @@ function system_poweroff {
 	echo "------------------------------------------------------------"
 	echo "run poweroff command..."
 	echo "------------------------------------------------------------"
-	if [ -n ${UPS_TTY_LOG} ]; then
+	if [ -n "${UPS_TTY_LOG}" ]; then
 		echo "${CURRENT_TIME}, POWEROFF" >> ${UPS_TTY_LOG}
 		echo "-------------------------" >> ${UPS_TTY_LOG}
 	fi
@@ -282,7 +287,7 @@ function watchdog_reset {
 # 1 ~ 9 : BATTERY LEVEL
 #/*---------------------------------------------------------------------------*/
 function ups_poweron_setup {
-	if [ ${CONFIG_UPS_ON_BATTERY_LEVEL} -gt "9" -o ${CONFIG_UPS_ON_BATTERY_LEVEL} -lt "0"]
+	if [ ${CONFIG_UPS_ON_BATTERY_LEVEL} -gt "9" -o ${CONFIG_UPS_ON_BATTERY_LEVEL} -lt "0" ]
 	then
 		echo "CONFIG_UPS_ON_BATTERY_LEVEL=${CONFIG_UPS_ON_BATTERY_LEVEL} value error."
 		echo "Power on when battery charge condition detected.(default)"
@@ -363,7 +368,6 @@ do
 	#/* Display UPS Status */
 	echo ${CURRENT_TIME}
 	check_ups_status
-	echo "UPS Battery Volt = ${UPS_BATTERY_VOLT} mV"
 
 	#/* Battery Log save */
 	if [ -n "${UPS_TTY_LOG}" ]; then
