@@ -1,6 +1,58 @@
 #!/bin/bash
 
 #/*---------------------------------------------------------------------------*/
+#/*---------------------------------------------------------------------------*/
+#
+#
+# Script configuration start
+#
+#
+#/*---------------------------------------------------------------------------*/
+#/* Battery level definition value for UPS system */
+#/*---------------------------------------------------------------------------*/
+BATTERY_LEVEL_FULL="4300"
+BATTERY_LEVEL_LV4="3900"
+BATTERY_LEVEL_LV3="3750"
+BATTERY_LEVEL_LV2="3650"
+BATTERY_LEVEL_LV1="3550"
+BATTERY_LEVEL_LV0="3400"
+
+#/*---------------------------------------------------------------------------*/
+#/* Set battery level for system power off */
+#/* BATERRY_LEVEL_FULL : Power off when battery discharge condition detected. */
+#/*---------------------------------------------------------------------------*/
+CONFIG_POWEROFF_BATTERY_LEVEL=${BATTERY_LEVEL_FULL}
+
+#/*---------------------------------------------------------------------------*/
+#/* Set battery level for system power on */
+#/* Power on when battery charge condition detected.(default) */
+# 0     : Detect charging status.(default)
+# 1 ~ 9 : BATTERY LEVEL
+#/*---------------------------------------------------------------------------*/
+CONFIG_UPS_ON_BATTERY_LEVEL=""
+
+#/*---------------------------------------------------------------------------*/
+#/* Set watchdog reset time */
+# 0     : Disable.(default)
+# 1 ~ 9 : Watchdog reset time(sec) : Warnning
+#
+# WARNING: The watchdog reset value must be greater than the script execution time.
+#
+# The script takes about 4-5 seconds to run once.
+#
+#/*---------------------------------------------------------------------------*/
+CONFIG_UPS_WATCHDOG_TIME=""
+
+#/*---------------------------------------------------------------------------*/
+#
+#
+# Script configuration end
+#
+#
+#/*---------------------------------------------------------------------------*/
+#/*---------------------------------------------------------------------------*/
+
+#/*---------------------------------------------------------------------------*/
 #/* Define CH55xduino ttyACM VID/PID (1209:c550) */
 #/*---------------------------------------------------------------------------*/
 VID_CH55xduino="1209"
@@ -13,10 +65,22 @@ UPS_TTY_NODE=""
 UPS_TTY_DATA="/tmp/ttyUPS.dat"
 
 #/*---------------------------------------------------------------------------*/
+#/* battery log filename (default disable) */
+#/* eg) UPS_TTY_LOG="/tmp/ttyUPS.log" */
+#/*---------------------------------------------------------------------------*/
+UPS_TTY_LOG=""
+
+#/*---------------------------------------------------------------------------*/
+#/* Script start time and date */
+#/*---------------------------------------------------------------------------*/
+CURRENT_TIME=$(date)
+
+#/*---------------------------------------------------------------------------*/
 #/* UPS Command List */
 #/*---------------------------------------------------------------------------*/
 # Send command to read battery volt to UPS.
 UPS_CMD_BATTERY_VOLT="@V0#"
+
 # Send command to read battery level to UPS.
 # 0 : BATTERY LEVEL 0 (3400 mV)
 # 1 : BATTERY LEVEL 1 (3550 mV)
@@ -24,44 +88,38 @@ UPS_CMD_BATTERY_VOLT="@V0#"
 # 3 : BATTERY LEVEL 3 (3750 mV)
 # 4 : BATTERY LEVEL 4 (3900 mV)
 UPS_CMD_BATTERY_LEVEL="@L0#"
+
 # Send command to read charger status to UPS.
-UPS_CMD_BATTERY_STATUS="@C0#"
+UPS_CMD_CHARGER_STATUS="@C0#"
+
 # Send command to ups off to UPS.
 UPS_CMD_POWEROFF="@P0#"
+
 # Send command to power on level to UPS.
+# *     : Detect charging status.(default)
 # 0 ~ 4 : BATTERY LEVEL
-# * : Detect charging status.(default)
 UPS_CMD_POWERON="@O0#"
 
+# Send command to watchdog reset time to UPS.
+# *     : Disable.(default)
+# 1 ~ 9 : Watchdog reset time
+UPS_CMD_WATCHDOG="@W0#"
+
+#/*---------------------------------------------------------------------------*/
+#/* for communication with ups */
 #/*---------------------------------------------------------------------------*/
 UPS_CMD_STR=""
 
+#/*---------------------------------------------------------------------------*/
+#/* UPS system data */
 #/*---------------------------------------------------------------------------*/
 UPS_BATTERY_VOLT="0"
 UPS_STATUS_CHRG="0"
 UPS_STATUS_FULL="0"
 
 #/*---------------------------------------------------------------------------*/
-#/* UPS Battery Level define value */
 #/*---------------------------------------------------------------------------*/
-BAT_LEVEL_FULL="4300"
-BAT_LEVEL_LV4="3900"
-BAT_LEVEL_LV3="3750"
-BAT_LEVEL_LV2="3650"
-BAT_LEVEL_LV1="3550"
-
-#/* System force power level */
-#POWER_OFF_VOLT=${BAT_LEVEL_LV3}
-
-#/* Power off when battery discharge condition detected. */
-POWER_OFF_VOLT=${BAT_LEVEL_FULL}
-
-UPS_SEND_CMD=""
-UPS_SEND_STR=""
-UPS_ON_LEVEL=""
-UPS_WATCHDOG_TIME=""
-
-#/*---------------------------------------------------------------------------*/
+#/* Kill previously running processes(dead process). */
 #/*---------------------------------------------------------------------------*/
 function kill_dead_process {
 	PID=""
@@ -75,6 +133,8 @@ function kill_dead_process {
 }
 
 #/*---------------------------------------------------------------------------*/
+#/* find ttyNode name : VID_CH55xduino(1209):PID_CH55xduino(c550)
+#/*---------------------------------------------------------------------------*/
 function find_tty_node {
 	UPS_TTY_NODE=`find $(grep -l "PRODUCT=$(printf "%x/%x" "0x${VID_CH55xduino}" "0x${PID_CH55xduino}")" \
 					/sys/bus/usb/devices/[0-9]*:*/uevent | sed 's,uevent$,,') \
@@ -83,6 +143,8 @@ function find_tty_node {
 
 }
 
+#/*---------------------------------------------------------------------------*/
+#/* Send control commands to the UPS via the UPS_CMD_STR variable.
 #/*---------------------------------------------------------------------------*/
 function ups_cmd_send {
 	# ttyACM response data wait settings.
@@ -126,53 +188,7 @@ function ups_cmd_send {
 }
 
 #/*---------------------------------------------------------------------------*/
-#/*---------------------------------------------------------------------------*/
-function read_ups_volt {
-	# ttyACM response data wait settings.
-	cat ${UPS_TTY_NODE} > ${UPS_TTY_DATA} &
-
-	# Get PID (cat command) to kill background process
-	PID=""
-	PID=$!
-
-	# Send command to read battery volt to UPS.
-	sleep 1
-	echo -ne "@V0#" > ${UPS_TTY_NODE}
-	sleep 1
-
-	# Kill background process(cat cmd)
-	if [ -n "$PID" ]; then
-		kill $PID
-	fi
-
-	# Update battery volt data.
-	UPS_BATTERY_VOLT=`cut -c 3-6 < ${UPS_TTY_DATA}`
-}
-
-#/*---------------------------------------------------------------------------*/
-function read_ups_status {
-	# ttyACM response data wait settings.
-	cat ${UPS_TTY_NODE} > ${UPS_TTY_DATA} &
-
-	# Get PID (cat command) to kill background process
-	PID=""
-	PID=$!
-
-	# Send command to read charger status to UPS.
-	sleep 1
-	echo -ne "@C0#" > ${UPS_TTY_NODE}
-	sleep 1
-
-	# Kill background process(cat cmd)
-	if [ -n "$PID" ]; then
-		kill $PID
-	fi
-
-	# Update charger status data.
-	UPS_STATUS_CHRG=`cut -c 6 < ${UPS_TTY_DATA}`
-	UPS_STATUS_FULL=`cut -c 4 < ${UPS_TTY_DATA}`
-}
-
+# UPS system staus check.
 #/*---------------------------------------------------------------------------*/
 function check_ups_status {
 	#/* UPS Status : Error...(Battery Removed) */
@@ -190,8 +206,8 @@ function check_ups_status {
 		echo "UPS Battery Volt = ${UPS_BATTERY_VOLT} mV"
 
 		#/* UPS Battery Status : Low Battery */
-		if [ ${UPS_BATTERY_VOLT} -lt ${POWER_OFF_VOLT} ]; then
-			if [ ${POWER_OFF_VOLT} -eq ${BAT_LEVEL_FULL} ]; then
+		if [ ${UPS_BATTERY_VOLT} -lt ${CONFIG_POWEROFF_BATTERY_LEVEL} ]; then
+			if [ ${CONFIG_POWEROFF_BATTERY_LEVEL} -eq ${BATTERY_LEVEL_FULL} ]; then
 				#/* Power off after Detecting UPS battery discharge. */
 				echo "------------------------------------------------------------"
 				echo "Detected UPS battery discharge."
@@ -210,40 +226,77 @@ function check_ups_status {
 			echo "UPS Battery Status : Full Charged."
 		fi
 
-		if [ ${POWER_OFF_VOLT} -eq ${BAT_LEVEL_FULL} ]; then
+		if [ ${CONFIG_POWEROFF_BATTERY_LEVEL} -eq ${BATTERY_LEVEL_FULL} ]; then
 			echo "UPS Power OFF : Detecting UPS battery discharge."
 		else
-			echo "UPS Power OFF : Battery Volt = ${POWER_OFF_VOLT} mV"
+			echo "UPS Power OFF : Battery Volt = ${CONFIG_POWEROFF_BATTERY_LEVEL} mV"
 		fi
 	fi
 }
 
 #/*---------------------------------------------------------------------------*/
+# Send command to ups off to UPS.
+#/*---------------------------------------------------------------------------*/
 function system_poweroff {
-	# ttyACM response data wait settings.
-	cat ${UPS_TTY_NODE} > ${UPS_TTY_DATA} &
-
-	# Get PID (cat command) to kill background process
-	PID=""
-	PID=$!
-
-	# Send command to ups off to UPS.
-	sleep 1
-	echo -ne "@P0#" > ${UPS_TTY_NODE}
-	sleep 1
-
-	# Kill background process(cat cmd)
-	if [ -n "$PID" ]; then
-		kill -9 $PID
-	fi
+	UPS_CMD_STR=${UPS_CMD_POWEROFF}
+	ups_cmd_send
 
 	echo "------------------------------------------------------------"
 	echo "run poweroff command..."
 	echo "------------------------------------------------------------"
+	if [ -n ${UPS_TTY_LOG} ]; then
+		echo "${CURRENT_TIME}, POWEROFF" >> ${UPS_TTY_LOG}
+		echo "-------------------------" >> ${UPS_TTY_LOG}
+	fi
 	# poweroff
 	exit 0
 }
 
+#/*---------------------------------------------------------------------------*/
+#/* Set watchdog reset time */
+# 0     : Disable.(default)
+# 1 ~ 9 : Watchdog reset time(sec) : Warnning
+#
+# WARNING: The watchdog reset value must be greater than the script execution time.
+#
+# The script takes about 4-5 seconds to run once.
+#
+#/*---------------------------------------------------------------------------*/
+function watchdog_reset {
+	if [ ${CONFIG_UPS_WATCHDOG_TIME} -gt "9" -o ${CONFIG_UPS_WATCHDOG_TIME} -lt "0"]
+	then
+		echo "CONFIG_UPS_WATCHDOG_TIME=${CONFIG_UPS_WATCHDOG_TIME} value error."
+		echo "WATCHDOG Disable"
+		CONFIG_UPS_WATCHDOG_TIME="0"
+	fi
+
+	UPS_CMD_WATCHDOG="@W${CONFIG_UPS_WATCHDOG_TIME}#"
+	UPS_CMD_STR=${UPS_CMD_WATCHDOG}
+	ups_cmd_send
+}
+
+#/*---------------------------------------------------------------------------*/
+#/* Set battery level for system power on */
+#/* Power on when battery charge condition detected.(default) */
+# 0     : Detect charging status.(default)
+# 1 ~ 9 : BATTERY LEVEL
+#/*---------------------------------------------------------------------------*/
+function ups_poweron_setup {
+	if [ ${CONFIG_UPS_ON_BATTERY_LEVEL} -gt "9" -o ${CONFIG_UPS_ON_BATTERY_LEVEL} -lt "0"]
+	then
+		echo "CONFIG_UPS_ON_BATTERY_LEVEL=${CONFIG_UPS_ON_BATTERY_LEVEL} value error."
+		echo "Power on when battery charge condition detected.(default)"
+		CONFIG_UPS_ON_BATTERY_LEVEL="0"
+	fi
+
+	UPS_CMD_POWERON="@O${CONFIG_UPS_ON_BATTERY_LEVEL}#"
+	UPS_CMD_STR=${UPS_CMD_POWERON}
+	ups_cmd_send
+}
+
+#/*---------------------------------------------------------------------------*/
+#/*---------------------------------------------------------------------------*/
+#/* START Script */
 #/*---------------------------------------------------------------------------*/
 #/* find CH55xduino ttyACM node (1209:c550) */
 #/*---------------------------------------------------------------------------*/
@@ -264,7 +317,18 @@ else
 fi
 
 #/*---------------------------------------------------------------------------*/
-#/* Kill previously running processes. */
+#/* Log status display */
+#/*---------------------------------------------------------------------------*/
+if [ -n "${UPS_TTY_LOG}" ]; then
+	echo "------------------------------------------------------------"
+	echo "Log Enable (${UPS_TTY_LOG})"
+	echo "------------------------------------------------------------"
+	echo "------------------------" >> ${UPS_TTY_LOG}
+	echo "${CURRENT_TIME}, POWERON" >> ${UPS_TTY_LOG}
+fi
+
+#/*---------------------------------------------------------------------------*/
+#/* Kill previously running processes(dead process). */
 #/*---------------------------------------------------------------------------*/
 kill_dead_process
 
@@ -274,7 +338,14 @@ kill_dead_process
 stty -F ${UPS_TTY_NODE} 9600 raw -echo
 
 #/*---------------------------------------------------------------------------*/
-#/* Main Loop */
+#/* Set battery level for system power on */
+#/*---------------------------------------------------------------------------*/
+if [ -n "${CONFIG_UPS_ON_BATTERY_LEVEL}" ]; then
+	ups_poweron_setup
+fi
+
+#/*---------------------------------------------------------------------------*/
+#/* Main Loop (The script takes about 4-5 seconds to run once.) */
 #/*---------------------------------------------------------------------------*/
 while true
 do
@@ -283,11 +354,27 @@ do
 	UPS_CMD_STR=${UPS_CMD_BATTERY_VOLT}
 	ups_cmd_send
 
-#	read_ups_volt
-	read_ups_status
-	date
+	UPS_CMD_STR=${UPS_CMD_CHARGER_STATUS}
+	ups_cmd_send
+
+	#/* current date, time */
+	CURRENT_TIME=$(date)
+
+	#/* Display UPS Status */
+	echo ${CURRENT_TIME}
 	check_ups_status
 	echo "UPS Battery Volt = ${UPS_BATTERY_VOLT} mV"
+
+	#/* Battery Log save */
+	if [ -n "${UPS_TTY_LOG}" ]; then
+		echo "${CURRENT_TIME}, ${UPS_BATTERY_VOLT}" >> ${UPS_TTY_LOG}
+	fi
+
+	#/* Watchdog control */
+	if [ -n "${CONFIG_UPS_WATCHDOG_TIME}" ]; then
+		watchdog_reset
+	fi
+
 	echo "------------------------------------------------------------"
 done
 
