@@ -19,7 +19,8 @@ User=root
 # working directory
 WorkingDirectory=/root/m1s_ups
 
-ExecStart=/bin/bash ./check_ups.sh
+# disable ups message
+ExecStart=/bin/bash ./check_ups.sh > /dev/null 2>&1
 ExecStartPre=/bin/sleep 1
 
 [Install]
