@@ -343,6 +343,12 @@ void repeat_data_check (void)
     }
 
     if (PeriodRequestWatchdogTime) {
+        /* GPIO Trigger watchdog reset */
+        if (TargetWatchdogClear) {
+            TargetWatchdogClear = false;
+            /* updata watchdog time */
+            MillisRequestWatchdogTime = millis();
+        }
         period = MillisRequestWatchdogTime + PeriodRequestWatchdogTime;
         if (period < millis()) {
             PeriodRequestWatchdogTime = 0;
@@ -558,8 +564,8 @@ void port_init(void)
     pinMode(PORT_LED_FULL, INPUT_PULLUP);
     LED_CHRG_STATUS = 0;    LED_FULL_STATUS = 0;
 
-    pinMode (PORT_CTL_POWER, INPUT);
-    pinMode (PORT_CTL_RESET, INPUT);
+    pinMode(PORT_CTL_POWER, INPUT);
+    pinMode(PORT_CTL_RESET, INPUT);
 
     /* Target GPIO Watchdog PIN */
     pinMode(PORT_WATCHDOG, INPUT);
@@ -604,7 +610,6 @@ void setup()
 
     /* for target watchdog (P3.2 INT0), Only falling trigger */
     attachInterrupt(0, int0_callback, FALLING);
-    detachInterrupt(0);
 
     /* Repeat flag 초기화 */
     repeat_data_clear();
@@ -633,6 +638,7 @@ void loop()
         BatteryAvrVolt  = battery_avr_volt (BatteryStatus);
 
         battery_level_display (BatteryStatus, BatteryAvrVolt);
+
         repeat_data_check();
         /* Target Power Off status */
         if (rPOWER_STATE.bits.bPowerOffEvent) {
@@ -691,13 +697,6 @@ void loop()
             USBSerial_println("Battery Level < 3400mV. Force Power Off...");
 #endif
         }
-    }
-
-    /* GPIO Trigger watchdog reset */
-    if (TargetWatchdogClear) {
-        TargetWatchdogClear = false;
-        /* updata watchdog time */
-        MillisRequestWatchdogTime = millis();
     }
 
     /* Serial message check */

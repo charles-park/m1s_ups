@@ -80,7 +80,8 @@ volatile PowerState     rPOWER_STATE;
 #define MICOM_VDD_mV    4500
 
 /* ADC 8 bits (256). mV resolution value */
-#define MICOM_ADC_RES   256
+//#define MICOM_ADC_RES   256
+#define MICOM_ADC_RES   255
 /* R9(1.2K) */
 #define BAT_ADC_R1      1200
 /* R10(20K) */
