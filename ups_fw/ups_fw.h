@@ -215,6 +215,9 @@ __xdata unsigned long MillisRequestWatchdogTime = 0;
 /*---------------------------------------------------------------------------*/
 /* Function prototype define */
 /*---------------------------------------------------------------------------*/
+void    LED_SetState            (unsigned char state);
+void    LED_Test                (void);
+
 unsigned long cal_battery_level (unsigned int val);
 
 float   battery_adc_volt_cal    (void);

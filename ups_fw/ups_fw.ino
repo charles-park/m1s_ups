@@ -67,6 +67,58 @@ void int0_callback()
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+void LED_SetState (unsigned char state)
+{
+    switch (state) {
+        case    0:  // All off
+            LED_LV4_STATUS = 0; LED_LV3_STATUS = 0;
+            LED_LV2_STATUS = 0; LED_LV1_STATUS = 0;
+            break;
+        /* toggle state */
+        case    1:  LED_LV1_STATUS = !LED_LV1_STATUS;   break;
+        case    2:  LED_LV2_STATUS = !LED_LV2_STATUS;   break;
+        case    3:  LED_LV3_STATUS = !LED_LV3_STATUS;   break;
+        case    4:  LED_LV4_STATUS = !LED_LV4_STATUS;   break;
+        default:
+            LED_LV4_STATUS = 1; LED_LV3_STATUS = 1;
+            LED_LV2_STATUS = 1; LED_LV1_STATUS = 1;
+            break;
+    }
+    digitalWrite(PORT_LED_LV4, LED_LV4_STATUS);
+    digitalWrite(PORT_LED_LV3, LED_LV3_STATUS);
+    digitalWrite(PORT_LED_LV2, LED_LV2_STATUS);
+    digitalWrite(PORT_LED_LV1, LED_LV1_STATUS);
+}
+
+/*---------------------------------------------------------------------------*/
+void LED_Test (void)
+{
+    /* UPS System watchdog disable */
+    GLOBAL_CFG_UNLOCK();
+    WDT_DISABLE();
+    WDT_CLR();
+
+    LED_SetState (0);   delay(300); LED_SetState (9);   delay(300);
+    LED_SetState (0);   delay(300); LED_SetState (9);   delay(300);
+    // All set
+    LED_SetState (0);   delay(300);
+    LED_SetState (1);   delay(500); LED_SetState (2);   delay(500);
+    LED_SetState (3);   delay(500); LED_SetState (4);   delay(500);
+    LED_SetState (4);   delay(500); LED_SetState (3);   delay(500);
+    LED_SetState (2);   delay(500); LED_SetState (1);   delay(500);
+    // All clear
+    LED_SetState (0);   delay(300);
+
+    /* target watchdog reset */
+    MillisRequestWatchdogTime = millis();
+
+    /* UPS System watchdog enable */
+    GLOBAL_CFG_UNLOCK();
+    WDT_ENABLE();
+    WDT_CLR();
+}
+
+/*---------------------------------------------------------------------------*/
 unsigned long cal_battery_level (unsigned int val)
 {
     return  (3500 + (val * 50));
@@ -121,22 +173,21 @@ void battery_avr_volt_init (void)
 float battery_avr_volt (enum eBATTERY_STATUS battery_status)
 {
     /* 처음 booting시 초기화 */
-    static char ErrorFlag = false;
+    static char BatteryRemove = false;
     static int  SamplePos = 0;
 
     float avr_volt = 0.;
 
     /* battery remove 상태에서는 0v 값을 전달한다.*/
     if (battery_status == eBATTERY_REMOVED) {
-        ErrorFlag = true;
+        BatteryRemove = true;
         return 0.0;
     }
 
     /* battery remove 상태에서 회복된 경우 avr값을 다시 산출하기 위하여 arrary를 초기화한다.*/
-    if (ErrorFlag) {
+    if (BatteryRemove) {
+        BatteryRemove = false;  SamplePos = 0;
         battery_avr_volt_init ();
-        SamplePos = 0;
-        ErrorFlag = false;
     }
     BatteryVoltSamples[SamplePos] = battery_volt();
 
@@ -151,7 +202,7 @@ float battery_avr_volt (enum eBATTERY_STATUS battery_status)
 /*---------------------------------------------------------------------------*/
 enum eBATTERY_STATUS battery_status (void)
 {
-    static bool remove_state = false;
+    static bool BatteryRemove = false;
 
     LED_CHRG_STATUS = digitalRead(PORT_LED_CHRG);
     LED_FULL_STATUS = digitalRead(PORT_LED_FULL);
@@ -163,7 +214,7 @@ enum eBATTERY_STATUS battery_status (void)
         while (millis() < (check_mills + 300)) {
             if (!digitalRead(PORT_LED_CHRG)) {
                 LED_CHRG_STATUS = 0;
-                remove_state = true;
+                BatteryRemove = true;
                 return eBATTERY_REMOVED;
             }
         }
@@ -173,8 +224,8 @@ enum eBATTERY_STATUS battery_status (void)
 #endif
     }
 
-    if (remove_state) {
-        remove_state = false;
+    if (BatteryRemove) {
+        BatteryRemove = false;
         LED_CHRG_STATUS = 0;    LED_FULL_STATUS = 0;
         return eBATTERY_REMOVED;
     }
@@ -431,6 +482,8 @@ void protocol_check(void)
                     /*
                         LED Test Firmware
                     */
+                    LED_Test();
+                    USBSerial_println("@T-END#");
                     return;
 
                 /* RESET, PWRBTN GPIO Test */
