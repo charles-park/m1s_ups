@@ -24,14 +24,19 @@
 
 /* for Battery discharge graph (log) */
 #define PERIOD_LOG_MILLIS   1000
-__xdata unsigned long MillisLog = 0;
-__xdata unsigned long LogCount = 0;
+
+__xdata unsigned long MillisLog      = 0;
+__xdata unsigned long LogCount       = 0;
+__xdata unsigned long BatteryVolt    = 0;
+__xdata unsigned long BatteryAdcVolt = 0;
 
 void display_battery_status (void)
 {
     /* for battery discharge graph */
     if (MillisLog + PERIOD_LOG_MILLIS < millis()) {
         MillisLog = millis ();
+        BatteryAdcVolt  = battery_adc_volt ();
+        BatteryVolt     = battery_volt ();
         /* log count, status, BattaryAvrVolt, BatteryVolt, BatteryAdcVolt */
         USBSerial_print(LogCount);              USBSerial_print(",");
         USBSerial_print((int)LED_CHRG_STATUS);  USBSerial_print(",");
@@ -58,7 +63,7 @@ volatile bool TargetWatchdogClear = false;
 #pragma save
 #pragma nooverlay
 /*---------------------------------------------------------------------------*/
-void int0_callback()
+void int0_callback ()
 {
     TargetWatchdogClear = true;
 }
@@ -170,21 +175,18 @@ void battery_avr_volt_init (void)
 }
 
 /*---------------------------------------------------------------------------*/
-float battery_avr_volt (enum eBATTERY_STATUS battery_status)
+float battery_avr_volt (enum eBATTERY_STATUS bat_status)
 {
-    /* 처음 booting시 초기화 */
     static char BatteryRemove = false;
     static int  SamplePos = 0;
 
     float avr_volt = 0.;
 
-    /* battery remove 상태에서는 0v 값을 전달한다.*/
-    if (battery_status == eBATTERY_REMOVED) {
+    if (bat_status == eBATTERY_REMOVED) {
         BatteryRemove = true;
         return 0.0;
     }
 
-    /* battery remove 상태에서 회복된 경우 avr값을 다시 산출하기 위하여 arrary를 초기화한다.*/
     if (BatteryRemove) {
         BatteryRemove = false;  SamplePos = 0;
         battery_avr_volt_init ();
@@ -208,34 +210,23 @@ enum eBATTERY_STATUS battery_status (void)
     LED_FULL_STATUS = digitalRead(PORT_LED_FULL);
 
     if (!LED_FULL_STATUS) {
-        /* Battery remove상태에서는 FULL은 0이고 CHRG는 Pulse 값을 가짐 */
-        /* CHRG값이 0으로 떨어지는지 확인하여 Battery remove상태인지 확인함 (300ms). */
         unsigned long check_mills = millis();
         while (millis() < (check_mills + 300)) {
             if (!digitalRead(PORT_LED_CHRG)) {
-                LED_CHRG_STATUS = 0;
-                BatteryRemove = true;
+                LED_CHRG_STATUS = 0;    BatteryRemove = true;
                 return eBATTERY_REMOVED;
             }
         }
-#if defined (__DEBUG__)
-        if (!LED_CHRG_STATUS)
-            USBSerial_println("Battery Removed...");
-#endif
     }
 
     if (BatteryRemove) {
-        BatteryRemove = false;
-        LED_CHRG_STATUS = 0;    LED_FULL_STATUS = 0;
+        BatteryRemove = false;  LED_CHRG_STATUS = 0;    LED_FULL_STATUS = 0;
         return eBATTERY_REMOVED;
     }
 
-    if      ( LED_CHRG_STATUS &&  LED_FULL_STATUS)
-        return eBATTERY_DISCHARGING;
-    else if (!LED_CHRG_STATUS &&  LED_FULL_STATUS)
-        return eBATTERY_CHARGING;
-    else if  (LED_CHRG_STATUS && !LED_FULL_STATUS)
-        return eBATTERY_FULL;
+    if      ( LED_CHRG_STATUS &&  LED_FULL_STATUS)  return eBATTERY_DISCHARGING;
+    else if (!LED_CHRG_STATUS &&  LED_FULL_STATUS)  return eBATTERY_CHARGING;
+    else if  (LED_CHRG_STATUS && !LED_FULL_STATUS)  return eBATTERY_FULL;
     else // (!LED_CHRG_STATUS && !LED_FULL_STATUS)
         return eBATTERY_REMOVED;
 }
@@ -244,64 +235,63 @@ enum eBATTERY_STATUS battery_status (void)
 void battery_level_display (enum eBATTERY_STATUS bat_status, unsigned long bat_volt)
 {
     static bool BlinkStatus = 0;
-    static unsigned long DispBatVolt = 0;
-
-    /* 배터리 상태를 비교할 초기값 설정, 충전시는 항상 led up, 방전시는 항산 led dn */
-    if (!DispBatVolt)
-        DispBatVolt = bat_volt;
-
     /* led blink control */
     BlinkStatus = !BlinkStatus;
 
+    if (bat_status != eBATTERY_REMOVED) {
+        LED_LV4_STATUS = bat_volt > BAT_DISPLAY_LV4 ? 1 : 0;
+        LED_LV3_STATUS = bat_volt > BAT_DISPLAY_LV3 ? 1 : 0;
+        LED_LV2_STATUS = bat_volt > BAT_DISPLAY_LV2 ? 1 : 0;
+        LED_LV1_STATUS = bat_volt > BAT_DISPLAY_LV1 ? 1 : 0;
+
+        digitalWrite(PORT_LED_LV4, LED_LV4_STATUS);
+        digitalWrite(PORT_LED_LV3, LED_LV3_STATUS);
+        digitalWrite(PORT_LED_LV2, LED_LV2_STATUS);
+        digitalWrite(PORT_LED_LV1, LED_LV1_STATUS);
+
+        if (bat_status == eBATTERY_DISCHARGING) {
+            if      (bat_volt > BAT_DISPLAY_LV4)    digitalWrite(PORT_LED_LV4, BlinkStatus);
+            else if (bat_volt > BAT_DISPLAY_LV3)    digitalWrite(PORT_LED_LV3, BlinkStatus);
+            else if (bat_volt > BAT_DISPLAY_LV2)    digitalWrite(PORT_LED_LV2, BlinkStatus);
+            else if (bat_volt > BAT_DISPLAY_LV1)    digitalWrite(PORT_LED_LV1, BlinkStatus);
+        }
+    } else {
+        digitalWrite(PORT_LED_LV4, BlinkStatus);    digitalWrite(PORT_LED_LV1, BlinkStatus);
+        digitalWrite(PORT_LED_LV3, 0);              digitalWrite(PORT_LED_LV2, 0);
+        LED_LV4_STATUS = LED_LV1_STATUS = 1;
+        LED_LV3_STATUS = LED_LV2_STATUS = 0;
+    }
+    if (rRESET_KEEP.bits.ePowerState == ePOWER_OFF) {
+        delay (POWEROFF_LED_DELAY);
+        digitalWrite(PORT_LED_LV4, 0);  digitalWrite(PORT_LED_LV3, 0);
+        digitalWrite(PORT_LED_LV2, 0);  digitalWrite(PORT_LED_LV1, 0);
+    }
+}
+
+/*---------------------------------------------------------------------------*/
+void battery_level_update (enum eBATTERY_STATUS bat_status, unsigned long bat_volt)
+{
+    static unsigned long DispBatVolt = 0;
+
+    if (!DispBatVolt)
+        DispBatVolt = bat_volt;
+
     switch (bat_status) {
         case eBATTERY_DISCHARGING:
-            /* 전압이 낮아지는 경우에만 업데이트 */
             if (DispBatVolt > bat_volt)
                 DispBatVolt = bat_volt;
             break;
-
         case eBATTERY_FULL:
         case eBATTERY_CHARGING:
-            /* 전압이 높아지는 경우에만 업데이트 */
             if (DispBatVolt < bat_volt)
                 DispBatVolt = bat_volt;
             break;
-
         default:
         case eBATTERY_REMOVED:
             DispBatVolt = 0;
-            /* Battery error 상태에서는 LED4, LED1을 점멸하여 상태이상을 표시함 */
-            digitalWrite(PORT_LED_LV4, BlinkStatus);
-            digitalWrite(PORT_LED_LV1, BlinkStatus);
-            digitalWrite(PORT_LED_LV3, 0);
-            digitalWrite(PORT_LED_LV2, 0);
-            LED_LV4_STATUS = LED_LV1_STATUS = 1;
-            LED_LV3_STATUS = LED_LV2_STATUS = 0;
-            return;
+            break;
     }
-
-    /* 일반적인 상태에서는 현재 battery level에 맞게 LED를 점등함.(점멸x) */
-    LED_LV4_STATUS = DispBatVolt > BAT_DISPLAY_LV4 ? 1 : 0;
-    LED_LV3_STATUS = DispBatVolt > BAT_DISPLAY_LV3 ? 1 : 0;
-    LED_LV2_STATUS = DispBatVolt > BAT_DISPLAY_LV2 ? 1 : 0;
-    LED_LV1_STATUS = DispBatVolt > BAT_DISPLAY_LV1 ? 1 : 0;
-
-    digitalWrite(PORT_LED_LV4, LED_LV4_STATUS);
-    digitalWrite(PORT_LED_LV3, LED_LV3_STATUS);
-    digitalWrite(PORT_LED_LV2, LED_LV2_STATUS);
-    digitalWrite(PORT_LED_LV1, LED_LV1_STATUS);
-
-    /* 배터리 방전상태에서는 현재 배터리 잔량위치의 LED 점멸함 */
-    if (bat_status == eBATTERY_DISCHARGING) {
-        if      (DispBatVolt > BAT_DISPLAY_LV4)
-            digitalWrite(PORT_LED_LV4, BlinkStatus);
-        else if (DispBatVolt > BAT_DISPLAY_LV3)
-            digitalWrite(PORT_LED_LV3, BlinkStatus);
-        else if (DispBatVolt > BAT_DISPLAY_LV2)
-            digitalWrite(PORT_LED_LV2, BlinkStatus);
-        else if (DispBatVolt > BAT_DISPLAY_LV1)
-            digitalWrite(PORT_LED_LV1, BlinkStatus);
-    }
+    battery_level_display (bat_status, DispBatVolt);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -352,16 +342,13 @@ void repeat_data_check (void)
         period = MillisRequestWatchdogTime + PeriodRequestWatchdogTime;
         if (period < millis()) {
             PeriodRequestWatchdogTime = 0;
-#if defined (__DEBUG__)
-            USBSerial_println ("Target watchdog Overflow event...");
-#endif
             target_system_reset ();
         }
     }
 }
 
 /*---------------------------------------------------------------------------*/
-void request_data_send(char cmd)
+void request_data_send (char cmd)
 {
     USBSerial_print((char)'@');
     USBSerial_print(cmd);
@@ -393,9 +380,9 @@ void request_data_send(char cmd)
             break;
         case    'P':
                 USBSerial_print("-OFF");
-                rPOWER_STATE.bits.bPowerOffEvent = true;
-                rPOWER_STATE.bits.ePrevBatteryStatus = BatteryStatus;
-                RESET_KEEP = rPOWER_STATE.byte;
+                rRESET_KEEP.bits.ePowerState = ePOWER_OFF;
+                rRESET_KEEP.bits.bRestartCondition = false;
+                RESET_KEEP = rRESET_KEEP.byte;
             break;
         case    'F':
                 USBSerial_print(FW_VERSION);
@@ -418,7 +405,7 @@ void request_data_send(char cmd)
 }
 
 /*---------------------------------------------------------------------------*/
-void protocol_check(void)
+void protocol_check (void)
 {
     if (USBSerial_available()) {
         /* protocol q */
@@ -447,19 +434,16 @@ void protocol_check(void)
                     MillisRequestChagerStatus = cur_millis;
                     break;
                 case    'W':
-                    /* Target Power가 ON인 상태에서만 Watchdog control */
-                    if (rPOWER_STATE.bits.bPowerOffEvent) {
-                        PeriodRequestWatchdogTime = 0;
-                        MillisRequestWatchdogTime = 0;
-                    } else {
+                    if (rRESET_KEEP.bits.ePowerState == ePOWER_ON) {
                         PeriodRequestWatchdogTime = cal_period;
                         MillisRequestWatchdogTime = cur_millis;
+                    } else {
+                        PeriodRequestWatchdogTime = 0;
+                        MillisRequestWatchdogTime = 0;
                     }
                     break;
                 case    'P':
                     /* system watch dog & repeat flag all clear */
-                    rPOWER_STATE.bits.bPowerOffEvent = true;
-                    RESET_KEEP = rPOWER_STATE.byte;
                     repeat_data_clear();
                     break;
                 case    'O':
@@ -483,6 +467,18 @@ void protocol_check(void)
                         USBSerial_println("@W-RST#");
                         USBSerial_flush();
                         while (1);
+                    return;
+                case    't':
+                    USBSerial_println("@Sleep#");
+                    USBSerial_flush();
+                    GLOBAL_CFG_UNLOCK();
+                    WAKE_CTRL |= 0x20;  // P1.5 low wakeup
+
+                    GLOBAL_CFG_UNLOCK();
+                    PCON |= 0x02;
+
+                    USBSerial_println("@Wake#");
+                    USBSerial_flush();
                     return;
                 case    'T':
                     /*
@@ -523,10 +519,6 @@ void target_system_reset (void)
     digitalWrite (PORT_CTL_RESET, 0);
 
     pinMode (PORT_CTL_RESET, INPUT);
-
-#if defined (__DEBUG__)
-    USBSerial_println ("Target system reset...");
-#endif
 }
 
 /*---------------------------------------------------------------------------*/
@@ -535,29 +527,65 @@ void target_system_power (bool onoff)
     if (onoff) {
         /* target system force power off */
         pinMode (PORT_CTL_POWER, INPUT);    pinMode (PORT_CTL_RESET, INPUT);
-
-        rPOWER_STATE.bits.bPowerOffEvent = false;
-
-#if defined (__DEBUG__)
-        USBSerial_println ("Target system power on...");
-#endif
     } else {
         /* target system force power off */
         pinMode (PORT_CTL_POWER, OUTPUT);   pinMode (PORT_CTL_RESET, OUTPUT);
         digitalWrite (PORT_CTL_POWER, 1);   digitalWrite (PORT_CTL_RESET, 1);
-
-        rPOWER_STATE.bits.bPowerOffEvent = true;
-
-#if defined (__DEBUG__)
-        USBSerial_println ("Target system force power off...");
-#endif
     }
-    RESET_KEEP = rPOWER_STATE.byte;
+    RESET_KEEP = rRESET_KEEP.byte;
     USBSerial_flush ();
 }
 
 /*---------------------------------------------------------------------------*/
-void port_init(void)
+void power_state_check (enum eBATTERY_STATUS bat_status, unsigned long bat_volt)
+{
+    bool boot_condition = false;
+
+    if (bat_volt > BAT_LEVEL_OFF) {
+        switch (rRESET_KEEP.bits.ePowerState) {
+            case    ePOWER_INIT:
+                boot_condition = true;
+            case    ePOWER_OFF:
+                if (bat_status == eBATTERY_DISCHARGING)
+                    rRESET_KEEP.bits.bRestartCondition = true;
+
+                if (rRESET_KEEP.bits.bRestartCondition) {
+                    switch (bat_status) {
+                        case eBATTERY_CHARGING: case eBATTERY_FULL:
+                            boot_condition = true;
+                            break;
+                    }
+                }
+                if (boot_condition) {
+                    if (bat_volt > BatteryBootVolt) {
+                        rRESET_KEEP.bits.ePowerState = ePOWER_ON;
+                        rRESET_KEEP.bits.bRestartCondition = false;
+                        target_system_power (true);
+                        battery_avr_volt_init ();
+                    }
+                }
+                else    rRESET_KEEP.bits.ePowerState = ePOWER_OFF;
+                break;
+            default :
+                break;
+        }
+    } else {
+        if (bat_status != eBATTERY_REMOVED) {
+            rRESET_KEEP.bits.ePowerState = ePOWER_OFF;
+            rRESET_KEEP.bits.bGpioStatus = true;
+            target_system_power (false);
+        } else {
+            if (rRESET_KEEP.bits.ePowerState == ePOWER_INIT) {
+                rRESET_KEEP.bits.ePowerState = ePOWER_ON;
+                target_system_power (true);
+            }
+        }
+    }
+    RESET_KEEP = rRESET_KEEP.byte;
+}
+
+/*---------------------------------------------------------------------------*/
+void port_init (void)
 {
     pinMode(PORT_BAT_ADC,  INPUT);
     pinMode(PORT_LED_CHRG, INPUT_PULLUP);
@@ -580,7 +608,7 @@ void port_init(void)
 }
 
 /*---------------------------------------------------------------------------*/
-void setup()
+void setup ()
 {
     /* UPS GPIO Port Init */
     port_init();
@@ -588,33 +616,20 @@ void setup()
     /* USB Serial init */
     USBSerial_flush();
 
-    rPOWER_STATE.byte = RESET_KEEP;
-
-    /* Reset flag를 검사하여 F/W 업데이트의 경우 시스템 reset을 하지 않도록 함. */
-    if (rPOWER_STATE.byte == 0) {
-        /* 처음 power on시에는 charging 상태에서도 켜지게 함. */
+    rRESET_KEEP.byte = RESET_KEEP;
+    /* PowerOn reset */
+    if (rRESET_KEEP.byte == 0) {
+        rRESET_KEEP.bits.ePowerState = ePOWER_INIT;
         BatteryBootVolt = 0;
-        /* 일정 Battery Level 확인 전 까지 Target system Power off */
         target_system_power (false);
-        /* Power On Event활성화 */
-        rPOWER_STATE.bits.bPowerOnEvent = true;
-    } else {
-        /* F/W업데이트시 기존 POWER 상태 복원 */
-        if (!rPOWER_STATE.bits.bPowerOffEvent)
-            target_system_power (true);
-        /* Power On Event clear */
-        rPOWER_STATE.bits.bPowerOnEvent = false;
     }
-
-    RESET_KEEP = rPOWER_STATE.byte;
+    RESET_KEEP = rRESET_KEEP.byte;
 
     /* for target watchdog (P3.2 INT0), Only falling trigger */
     attachInterrupt(0, int0_callback, FALLING);
 
-    /* Repeat flag 초기화 */
     repeat_data_clear();
 
-    /* Battery sampling arrary 초기화 */
     battery_avr_volt_init ();
 
     /* UPS System watchdog enable */
@@ -629,74 +644,19 @@ void loop()
     /* UPS System watchdog reset */
     WDT_CLR();
 
-    /* Target이 OFF상태의 경우에는 Loop를 2.5sec 마다 한번씩 실행하므로 ADC Update가 느릴 수 있음. */
     if(MillisLoop + PERIOD_LOOP_MILLIS < millis()) {
-        MillisLoop      = millis ();
-        BatteryAdcVolt  = battery_adc_volt ();
-        BatteryVolt     = battery_volt ();
+
         BatteryStatus   = battery_status ();
         BatteryAvrVolt  = battery_avr_volt (BatteryStatus);
 
-        battery_level_display (BatteryStatus, BatteryAvrVolt);
+        power_state_check    (BatteryStatus, BatteryAvrVolt);
+        battery_level_update (BatteryStatus, BatteryAvrVolt);
+        repeat_data_check    ();
 
-        repeat_data_check();
-        /* Target Power Off status */
-        if (rPOWER_STATE.bits.bPowerOffEvent) {
-            /*
-                Target의 Battery Status가 Discharging에서 Charging으로 바뀐경우
-                USB Cable을 재 접속한 것이므로 Power On Event를 활성화 시키고,
-                바로 꺼짐을 방지하기 위하여 BatteryBootVolt 전압보다 큰 경우에 Power On을 시킨다.
-
-                처음 Power On booting시 PowerOnEvent는 true상태이며 Main loop에서 BatteryBootVolt확인 후
-                Power On을 시킨다.
-
-                Power on reset의 경우 초기 BatteryBootVolt = 0으로 charging모드의 경우 바로 켜지도록 하며
-                차후 command를 통하여 두번째 power on부터는 BatteryBootVolt를 적용하도록 한다.
-
-                RESET_KEEP Register는 Power On reset이 아닌 경우 계속하여 기존의 값을 유지하고 있으므로
-                기존 상태의 Battery Status를 기록하여 Battery상태의 변화를 감지하여 Power On Event를 생성하거나
-                F/W update후 reset상태에서도 기존의 UPS상태를 유지하기 위하여 사용한다.
-            */
-            if ((BatteryStatus != eBATTERY_REMOVED) &&
-                (rPOWER_STATE.bits.ePrevBatteryStatus != BatteryStatus)) {
-
-                rPOWER_STATE.bits.ePrevBatteryStatus = BatteryStatus;
-                rPOWER_STATE.bits.bPowerOffEvent = true;
-
-                /* Discharge -> Charging 2초안에 이루어지는 경우 detect를 하지 못하는 경우 발생함. */
-                /* 기본적으로 2초 주기로 검사하기 때문에 발생하는 문제임. */
-                switch (BatteryStatus) {
-                    case    eBATTERY_CHARGING:
-                    case    eBATTERY_FULL:
-                        rPOWER_STATE.bits.bPowerOnEvent = true;
-                    case    eBATTERY_DISCHARGING:
-                        if (rPOWER_STATE.bits.bPowerOnEvent) {
-                            if (BatteryAvrVolt > BatteryBootVolt) {
-                                rPOWER_STATE.bits.bPowerOnEvent = false;
-                                target_system_power (true);
-                                /* Battery avr value init */
-                                battery_avr_volt_init ();
-                            }
-                        }
-                    break;
-                }
-                RESET_KEEP = rPOWER_STATE.byte;
-            }
-            /* LED on display 시간을 100ms만 표시 */
-            delay (POWEROFF_LED_DELAY);
-            digitalWrite(PORT_LED_LV4, 0);  digitalWrite(PORT_LED_LV3, 0);
-            digitalWrite(PORT_LED_LV2, 0);  digitalWrite(PORT_LED_LV1, 0);
-            /* main loop를 2000ms 후에 다시 진입하도록 Offset값을 추가 */
-            MillisLoop = millis() + PEROID_OFF_MILLIS;
-        }
-
-        /* Battery Level이 3400mV보다 낮은 경우 강제로 Power off */
-        if (BatteryAvrVolt < BAT_LEVEL_OFF) {
-            target_system_power (false);
-#if defined(__DEBUG__)
-            USBSerial_println("Battery Level < 3400mV. Force Power Off...");
-#endif
-        }
+        /* main loop cycle update */
+        MillisLoop = millis ();
+        if (rRESET_KEEP.bits.ePowerState == ePOWER_OFF)
+            MillisLoop += PEROID_OFF_MILLIS;
     }
 
     /* Serial message check */

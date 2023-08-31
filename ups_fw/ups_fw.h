@@ -23,17 +23,18 @@
 #define WDT_DISABLE()           ( GLOBAL_CFG &= ~bWDOG_EN )
 #define WDT_CLR()               ( WDOG_COUNT  = 0 )
 
-/* RESET_KEEP Register를 사용하여 Power state관리. */
+/* Use RESET_KEEP register to manage power states */
 typedef union {
     struct {
-        unsigned char   ePrevBatteryStatus  : 6;
-        unsigned char   bPowerOffEvent      : 1;
-        unsigned char   bPowerOnEvent       : 1;
+        unsigned char   NotUsed             : 4;
+        unsigned char   bGpioStatus         : 1;
+        unsigned char   bRestartCondition   : 1;
+        unsigned char   ePowerState         : 2;
     }   bits;
     unsigned char       byte;
-}   PowerState;
+}   regRESET_KEEP;
 
-volatile PowerState     rPOWER_STATE;
+volatile regRESET_KEEP  rRESET_KEEP;
 
 /*---------------------------------------------------------------------------*/
 /* TC4056A Charger status check port */
@@ -100,7 +101,7 @@ volatile PowerState     rPOWER_STATE;
 #define BAT_LEVEL_3650mV    3650
 #define BAT_LEVEL_3600mV    3600
 #define BAT_LEVEL_3550mV    3550
-/* Battery level이 3400mV보다 작은 경우 강제로 system power off */
+/* Force off Battery level */
 #define BAT_LEVEL_OFF       3400
 
 /*---------------------------------------------------------------------------*/
@@ -112,23 +113,21 @@ volatile PowerState     rPOWER_STATE;
 #define BAT_DISPLAY_LV1     BAT_LEVEL_3550mV
 
 /*---------------------------------------------------------------------------*/
-/* booting을 위한 최소 battery level 설정 */
 /* Set battery level for system power on */
 /* Power on when battery charge condition detected.(default) */
 /* 0     : Detect charging status.(default) */
-/* 1 ~ 9 : BATTERY LEVEL */
+/* 1 ~ 9 : BATTERY LEVEL, cal_volt = 3500 + (50 * value) */
 /*---------------------------------------------------------------------------*/
 __xdata unsigned long BatteryBootVolt = 0;
 
 /*---------------------------------------------------------------------------*/
-/* ADC Raw 샘플 갯수. 샘플 갯수중 최대값, 최소값을 제외한 평균값은 ADC값으로 사용한다. */
+/* ADC Raw sample count. */
 /*---------------------------------------------------------------------------*/
 #define ADC_SAMPLE_CNT      10
 
 /*---------------------------------------------------------------------------*/
-/* 1분 평균값 산출 (1초당 2번 * 60개 샘플) */
+/* 10 sec avr */
 /*---------------------------------------------------------------------------*/
-//#define BAT_AVR_SAMPLE_CNT  120
 #define BAT_AVR_SAMPLE_CNT  20
 
 __xdata float BatteryVoltSamples[BAT_AVR_SAMPLE_CNT];
@@ -162,11 +161,20 @@ __xdata bool LED_LV4_STATUS = false;
 __xdata char Protocol[PROTOCOL_SIZE];
 
 /*---------------------------------------------------------------------------*/
+/* Power State */
+/*---------------------------------------------------------------------------*/
+enum {
+    ePOWER_INIT = 0,
+    ePOWER_ON,
+    ePOWER_OFF,
+    ePOWER_END,
+}   ePOWER_STATE;
+
 /*---------------------------------------------------------------------------*/
 /* Battery Status */
 /*---------------------------------------------------------------------------*/
 enum {
-    eBATTERY_DISCHARGING = 1,
+    eBATTERY_DISCHARGING = 0,
     eBATTERY_CHARGING,
     eBATTERY_FULL,
     eBATTERY_REMOVED,
@@ -180,19 +188,17 @@ __xdata enum eBATTERY_STATUS BatteryStatus = eBATTERY_REMOVED;
 /*---------------------------------------------------------------------------*/
 #define TARGET_RESET_DELAY      100
 
-/* Battery Read 및 Display 주기 */
+/* Main loop period */
 #define PERIOD_LOOP_MILLIS      500
 
-/* Power off상태에서 LED display 주기 */
+/* Off state period */
 #define PEROID_OFF_MILLIS       2000
 
-/* Power off시 배터리 잔량 LED표시 시간 */
+/* Error display delay */
 #define POWEROFF_LED_DELAY      100
 
 __xdata unsigned long MillisLoop        = 0;
-__xdata unsigned long BatteryVolt       = 0;
 __xdata unsigned long BatteryAvrVolt    = 0;
-__xdata unsigned long BatteryAdcVolt    = 0;
 
 /*---------------------------------------------------------------------------*/
 /* Auto repeat data control */
@@ -216,29 +222,36 @@ __xdata unsigned long MillisRequestWatchdogTime = 0;
 /*---------------------------------------------------------------------------*/
 /* Function prototype define */
 /*---------------------------------------------------------------------------*/
-void    LED_SetState            (unsigned char state);
-void    LED_Test                (void);
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void            LED_SetState            (unsigned char state);
+void            LED_Test                (void);
 
-unsigned long cal_battery_level (unsigned int val);
+unsigned long   cal_battery_level       (unsigned int val);
 
-float   battery_adc_volt_cal    (void);
-float   battery_adc_volt        (void);
-float   battery_volt            (void);
-void    battery_avr_volt_init   (void);
-float   battery_avr_volt        (enum eBATTERY_STATUS battery_status);
+float           battery_adc_volt_cal    (void);
+float           battery_adc_volt        (void);
+float           battery_volt            (void);
+void            battery_avr_volt_init   (void);
+float           battery_avr_volt        (enum eBATTERY_STATUS bat_status);
 
-enum eBATTERY_STATUS battery_status (void);
-void    battery_level_display   (enum eBATTERY_STATUS bat_status, unsigned long bat_volt);
-void    repeat_data_clear       (void);
-void    repeat_data_check       (void);
-void    request_data_send       (char cmd);
-void    protocol_check          (void);
+enum eBATTERY_STATUS battery_status     (void);
 
-void    target_system_reset     (void);
-void    target_system_power     (bool onoff);
-void    port_init               (void);
-void    setup                   ();
-void    loop                    ();
+void            battery_level_display   (enum eBATTERY_STATUS bat_status, unsigned long bat_volt);
+void            battery_level_update    (enum eBATTERY_STATUS bat_status, unsigned long bat_volt);
+
+void            repeat_data_clear       (void);
+void            repeat_data_check       (void);
+void            request_data_send       (char cmd);
+void            protocol_check          (void);
+
+void            target_system_reset     (void);
+void            target_system_power     (bool onoff);
+
+void            power_state_check       (enum eBATTERY_STATUS bat_status, unsigned long bat_volt);
+void            port_init               (void);
+void            setup                   ();
+void            loop                    ();
 
 /*---------------------------------------------------------------------------*/
 #endif  // __UPS_FW_H__
