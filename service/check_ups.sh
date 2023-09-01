@@ -37,7 +37,7 @@ CONFIG_POWEROFF_BATTERY_LEVEL=${BATTERY_LEVEL_FULL}
 #/* Power on when battery charge condition detected.(default) */
 # BATTERY_LEVEL_0mV : Detect charging status.(default)
 #/*---------------------------------------------------------------------------*/
- CONFIG_POWERON_BATTERY_LEVEL=${BATTERY_LEVEL_0mV}
+CONFIG_POWERON_BATTERY_LEVEL=${BATTERY_LEVEL_0mV}
 # CONFIG_POWERON_BATTERY_LEVEL=${BATTERY_LEVEL_3550mV}
 
 #/*---------------------------------------------------------------------------*/
