@@ -92,25 +92,25 @@ volatile regRESET_KEEP  rRESET_KEEP;
 /* Battery Level (1 ~ 9) */
 /* cal = 3500 + (level * 50) mV*/
 /*---------------------------------------------------------------------------*/
-#define BAT_LEVEL_3950mV    3950
-#define BAT_LEVEL_3900mV    3900
-#define BAT_LEVEL_3850mV    3850
-#define BAT_LEVEL_3800mV    3800
-#define BAT_LEVEL_3750mV    3750
-#define BAT_LEVEL_3700mV    3700
-#define BAT_LEVEL_3650mV    3650
-#define BAT_LEVEL_3600mV    3600
-#define BAT_LEVEL_3550mV    3550
+#define BATTERY_LEVEL_3950mV    3950
+#define BATTERY_LEVEL_3900mV    3900
+#define BATTERY_LEVEL_3850mV    3850
+#define BATTERY_LEVEL_3800mV    3800
+#define BATTERY_LEVEL_3750mV    3750
+#define BATTERY_LEVEL_3700mV    3700
+#define BATTERY_LEVEL_3650mV    3650
+#define BATTERY_LEVEL_3600mV    3600
+#define BATTERY_LEVEL_3550mV    3550
 /* Force off Battery level */
-#define BAT_LEVEL_OFF       3400
+#define BATTERY_LEVEL_OFF       3400
 
 /*---------------------------------------------------------------------------*/
 /* Display Battery Level */
 /*---------------------------------------------------------------------------*/
-#define BAT_DISPLAY_LV4     BAT_LEVEL_3900mV
-#define BAT_DISPLAY_LV3     BAT_LEVEL_3750mV
-#define BAT_DISPLAY_LV2     BAT_LEVEL_3650mV
-#define BAT_DISPLAY_LV1     BAT_LEVEL_3550mV
+#define BATTERY_DISPLAY_LV4     BATTERY_LEVEL_3900mV
+#define BATTERY_DISPLAY_LV3     BATTERY_LEVEL_3750mV
+#define BATTERY_DISPLAY_LV2     BATTERY_LEVEL_3650mV
+#define BATTERY_DISPLAY_LV1     BATTERY_LEVEL_3550mV
 
 /*---------------------------------------------------------------------------*/
 /* Set battery level for system power on */

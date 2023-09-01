@@ -239,10 +239,10 @@ void battery_level_display (enum eBATTERY_STATUS bat_status, unsigned long bat_v
     BlinkStatus = !BlinkStatus;
 
     if (bat_status != eBATTERY_REMOVED) {
-        LED_LV4_STATUS = bat_volt > BAT_DISPLAY_LV4 ? 1 : 0;
-        LED_LV3_STATUS = bat_volt > BAT_DISPLAY_LV3 ? 1 : 0;
-        LED_LV2_STATUS = bat_volt > BAT_DISPLAY_LV2 ? 1 : 0;
-        LED_LV1_STATUS = bat_volt > BAT_DISPLAY_LV1 ? 1 : 0;
+        LED_LV4_STATUS = bat_volt > BATTERY_DISPLAY_LV4 ? 1 : 0;
+        LED_LV3_STATUS = bat_volt > BATTERY_DISPLAY_LV3 ? 1 : 0;
+        LED_LV2_STATUS = bat_volt > BATTERY_DISPLAY_LV2 ? 1 : 0;
+        LED_LV1_STATUS = bat_volt > BATTERY_DISPLAY_LV1 ? 1 : 0;
 
         digitalWrite(PORT_LED_LV4, LED_LV4_STATUS);
         digitalWrite(PORT_LED_LV3, LED_LV3_STATUS);
@@ -250,10 +250,10 @@ void battery_level_display (enum eBATTERY_STATUS bat_status, unsigned long bat_v
         digitalWrite(PORT_LED_LV1, LED_LV1_STATUS);
 
         if (bat_status == eBATTERY_DISCHARGING) {
-            if      (bat_volt > BAT_DISPLAY_LV4)    digitalWrite(PORT_LED_LV4, BlinkStatus);
-            else if (bat_volt > BAT_DISPLAY_LV3)    digitalWrite(PORT_LED_LV3, BlinkStatus);
-            else if (bat_volt > BAT_DISPLAY_LV2)    digitalWrite(PORT_LED_LV2, BlinkStatus);
-            else if (bat_volt > BAT_DISPLAY_LV1)    digitalWrite(PORT_LED_LV1, BlinkStatus);
+            if      (bat_volt > BATTERY_DISPLAY_LV4)    digitalWrite(PORT_LED_LV4, BlinkStatus);
+            else if (bat_volt > BATTERY_DISPLAY_LV3)    digitalWrite(PORT_LED_LV3, BlinkStatus);
+            else if (bat_volt > BATTERY_DISPLAY_LV2)    digitalWrite(PORT_LED_LV2, BlinkStatus);
+            else if (bat_volt > BATTERY_DISPLAY_LV1)    digitalWrite(PORT_LED_LV1, BlinkStatus);
         }
     } else {
         digitalWrite(PORT_LED_LV4, BlinkStatus);    digitalWrite(PORT_LED_LV1, BlinkStatus);
@@ -454,8 +454,10 @@ void protocol_check (void)
                     /* 1 ~ 9 : BATTERY LEVEL */
                     /* #define CAL_BAT_LEVEL(x)    (3500 + (x * 50)) */
                     /*---------------------------------------------------------------------------*/
-                    if ((data <= '9') && (data >= '0'))
+                    if ((data <= '9') && (data > '0'))
                         BatteryBootVolt = cal_battery_level(data - '0');
+                    else
+                        BatteryBootVolt = 0;
                     break;
                 case    'F':
                     /*
@@ -535,7 +537,7 @@ void power_state_check (enum eBATTERY_STATUS bat_status, unsigned long bat_volt)
 {
     bool boot_condition = false;
 
-    if (bat_volt > BAT_LEVEL_OFF) {
+    if (bat_volt > BATTERY_LEVEL_OFF) {
         switch (rRESET_KEEP.bits.ePowerState) {
             case    ePOWER_INIT:
                 boot_condition = true;

@@ -11,27 +11,34 @@
 #/* Battery level definition value for UPS system */
 #/*---------------------------------------------------------------------------*/
 BATTERY_LEVEL_FULL="4300"
-BATTERY_LEVEL_LV4="3900"
-BATTERY_LEVEL_LV3="3750"
-BATTERY_LEVEL_LV2="3650"
-BATTERY_LEVEL_LV1="3550"
-BATTERY_LEVEL_LV0="3400"
+
+#/* Battery level define (1 ~ 9) */
+BATTERY_LEVEL_3550mV="3550"
+BATTERY_LEVEL_3600mV="3600"
+BATTERY_LEVEL_3650mV="3650"
+BATTERY_LEVEL_3700mV="3700"
+BATTERY_LEVEL_3750mV="3750"
+BATTERY_LEVEL_3800mV="3800"
+BATTERY_LEVEL_3850mV="3850"
+BATTERY_LEVEL_3900mV="3900"
+BATTERY_LEVEL_3950mV="3950"
+
+BATTERY_LEVEL_0mV="0"
 
 #/*---------------------------------------------------------------------------*/
 #/* Set battery level for system power off */
 #/* BATERRY_LEVEL_FULL : Power off when battery discharge condition detected. */
 #/*---------------------------------------------------------------------------*/
 CONFIG_POWEROFF_BATTERY_LEVEL=${BATTERY_LEVEL_FULL}
-# CONFIG_POWEROFF_BATTERY_LEVEL=${BATTERY_LEVEL_LV4}
+# CONFIG_POWEROFF_BATTERY_LEVEL=${BATTERY_LEVEL_3900mV}
 
 #/*---------------------------------------------------------------------------*/
 #/* Set battery level for system power on */
 #/* Power on when battery charge condition detected.(default) */
-# 0     : Detect charging status.(default)
-# 1 ~ 9 : BATTERY LEVEL
+# BATTERY_LEVEL_0mV : Detect charging status.(default)
 #/*---------------------------------------------------------------------------*/
-CONFIG_UPS_ON_BATTERY_LEVEL="0"
-# CONFIG_UPS_ON_BATTERY_LEVEL="4"
+ CONFIG_POWERON_BATTERY_LEVEL=${BATTERY_LEVEL_0mV}
+# CONFIG_POWERON_BATTERY_LEVEL=${BATTERY_LEVEL_3550mV}
 
 #/*---------------------------------------------------------------------------*/
 #/* Set watchdog reset time */
@@ -43,7 +50,7 @@ CONFIG_UPS_ON_BATTERY_LEVEL="0"
 # The script takes about 4-5 seconds to run once.
 #
 #/*---------------------------------------------------------------------------*/
-CONFIG_UPS_WATCHDOG_TIME=""
+CONFIG_WATCHDOG_RESET_TIME=""
 
 #/*---------------------------------------------------------------------------*/
 #
@@ -84,11 +91,10 @@ CURRENT_TIME=$(date)
 UPS_CMD_BATTERY_VOLT="@V0#"
 
 # Send command to read battery level to UPS.
-# 0 : BATTERY LEVEL 0 (3400 mV)
-# 1 : BATTERY LEVEL 1 (3550 mV)
-# 2 : BATTERY LEVEL 2 (3650 mV)
-# 3 : BATTERY LEVEL 3 (3750 mV)
-# 4 : BATTERY LEVEL 4 (3900 mV)
+# LED 1 : BATTERY DISPLAY LEVEL 1 (3550 mV > Battery voltage)
+# LED 2 : BATTERY DISPLAY LEVEL 2 (3650 mV > Battery voltage)
+# LED 3 : BATTERY DISPLAY LEVEL 3 (3750 mV > Battery voltage)
+# LED 4 : BATTERY DISPLAY LEVEL 4 (3900 mV > Battery voltage)
 UPS_CMD_BATTERY_LEVEL="@L0#"
 
 # Send command to read charger status to UPS.
@@ -268,14 +274,14 @@ function system_poweroff {
 #
 #/*---------------------------------------------------------------------------*/
 function watchdog_reset {
-	if [ ${CONFIG_UPS_WATCHDOG_TIME} -gt "9" -o ${CONFIG_UPS_WATCHDOG_TIME} -lt "0"]
+	if [ ${CONFIG_WATCHDOG_RESET_TIME} -gt "9" -o ${CONFIG_WATCHDOG_RESET_TIME} -lt "0"]
 	then
-		echo "CONFIG_UPS_WATCHDOG_TIME=${CONFIG_UPS_WATCHDOG_TIME} value error."
+		echo "CONFIG_WATCHDOG_RESET_TIME=${CONFIG_WATCHDOG_RESET_TIME} value error."
 		echo "WATCHDOG Disable"
-		CONFIG_UPS_WATCHDOG_TIME="0"
+		CONFIG_WATCHDOG_RESET_TIME="0"
 	fi
 
-	UPS_CMD_WATCHDOG="@W${CONFIG_UPS_WATCHDOG_TIME}#"
+	UPS_CMD_WATCHDOG="@W${CONFIG_WATCHDOG_RESET_TIME}#"
 	UPS_CMD_STR=${UPS_CMD_WATCHDOG}
 	ups_cmd_send
 }
@@ -287,14 +293,46 @@ function watchdog_reset {
 # 1 ~ 9 : BATTERY LEVEL
 #/*---------------------------------------------------------------------------*/
 function ups_poweron_setup {
-	if [ ${CONFIG_UPS_ON_BATTERY_LEVEL} -gt "9" -o ${CONFIG_UPS_ON_BATTERY_LEVEL} -lt "0" ]
+	#/* Update data */
+	case ${CONFIG_POWERON_BATTERY_LEVEL} in
+		${BATTERY_LEVEL_3550mV})
+			POWERON_BATTERY_LEVEL="1"
+			;;
+		${BATTERY_LEVEL_3600mV})
+			POWERON_BATTERY_LEVEL="2"
+			;;
+		${BATTERY_LEVEL_3650mV})
+			POWERON_BATTERY_LEVEL="3"
+			;;
+		${BATTERY_LEVEL_3700mV})
+			POWERON_BATTERY_LEVEL="4"
+			;;
+		${BATTERY_LEVEL_3750mV})
+			POWERON_BATTERY_LEVEL="5"
+			;;
+		${BATTERY_LEVEL_3800mV})
+			POWERON_BATTERY_LEVEL="6"
+			;;
+		${BATTERY_LEVEL_3850mV})
+			POWERON_BATTERY_LEVEL="7"
+			;;
+		${BATTERY_LEVEL_3900mV})
+			POWERON_BATTERY_LEVEL="8"
+			;;
+		${BATTERY_LEVEL_3950mV})
+			POWERON_BATTERY_LEVEL="9"
+			;;
+		* )
+			POWERON_BATTERY_LEVEL="0"
+			;;
+	esac
+
+	if [ ${POWERON_BATTERY_LEVEL} -eq "0" ]
 	then
-		echo "CONFIG_UPS_ON_BATTERY_LEVEL=${CONFIG_UPS_ON_BATTERY_LEVEL} value error."
 		echo "Power on when battery charge condition detected.(default)"
-		CONFIG_UPS_ON_BATTERY_LEVEL="0"
 	fi
 
-	UPS_CMD_POWERON="@O${CONFIG_UPS_ON_BATTERY_LEVEL}#"
+	UPS_CMD_POWERON="@O${POWERON_BATTERY_LEVEL}#"
 	UPS_CMD_STR=${UPS_CMD_POWERON}
 	ups_cmd_send
 }
@@ -375,7 +413,7 @@ do
 	fi
 
 	#/* Watchdog control */
-	if [ -n "${CONFIG_UPS_WATCHDOG_TIME}" ]; then
+	if [ -n "${CONFIG_WATCHDOG_RESET_TIME}" ]; then
 		watchdog_reset
 	fi
 
