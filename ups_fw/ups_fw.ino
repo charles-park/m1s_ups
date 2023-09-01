@@ -444,6 +444,7 @@ void protocol_check (void)
                     repeat_data_clear();
                     rRESET_KEEP.bits.ePowerState = ePOWER_OFF;
                     rRESET_KEEP.bits.bRestartCondition = false;
+                    rRESET_KEEP.bits.bGpioStatus = true;
                     RESET_KEEP = rRESET_KEEP.byte;
                     break;
                 case    'O':
@@ -515,12 +516,13 @@ void target_system_reset (void)
 void target_system_power (bool onoff)
 {
     if (onoff) {
-        pinMode (PORT_CTL_POWER, OUTPUT);
-        /* Power button signal */
-        digitalWrite (PORT_CTL_POWER, 0);   delay (TARGET_RESET_DELAY);
-        digitalWrite (PORT_CTL_POWER, 1);   delay (TARGET_RESET_DELAY);
-        digitalWrite (PORT_CTL_POWER, 0);
-
+        if (rRESET_KEEP.bits.bGpioStatus) {
+            /* Power button signal */
+            pinMode (PORT_CTL_POWER, OUTPUT);
+            digitalWrite (PORT_CTL_POWER, 0);   delay (TARGET_RESET_DELAY);
+            digitalWrite (PORT_CTL_POWER, 1);   delay (TARGET_RESET_DELAY);
+            digitalWrite (PORT_CTL_POWER, 0);
+        }
         pinMode (PORT_CTL_POWER, INPUT);    pinMode (PORT_CTL_RESET, INPUT);
     } else {
         /* target system force power off */
