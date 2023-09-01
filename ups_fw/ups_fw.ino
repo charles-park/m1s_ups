@@ -522,6 +522,7 @@ void target_system_power (bool onoff)
             digitalWrite (PORT_CTL_POWER, 0);   delay (TARGET_RESET_DELAY);
             digitalWrite (PORT_CTL_POWER, 1);   delay (TARGET_RESET_DELAY);
             digitalWrite (PORT_CTL_POWER, 0);
+            rRESET_KEEP.bits.bGpioStatus = false;
         }
         pinMode (PORT_CTL_POWER, INPUT);    pinMode (PORT_CTL_RESET, INPUT);
     } else {
