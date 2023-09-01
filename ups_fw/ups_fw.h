@@ -191,8 +191,8 @@ __xdata enum eBATTERY_STATUS BatteryStatus = eBATTERY_REMOVED;
 /* Main loop period */
 #define PERIOD_LOOP_MILLIS      500
 
-/* Off state period */
-#define PEROID_OFF_MILLIS       2000
+/* Off state period 2 sec (2000 - PERIOD_LOOP_MILLIS) */
+#define PEROID_OFF_MILLIS       1500
 
 /* Error display delay */
 #define POWEROFF_LED_DELAY      100

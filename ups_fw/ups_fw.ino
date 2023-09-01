@@ -380,9 +380,6 @@ void request_data_send (char cmd)
             break;
         case    'P':
                 USBSerial_print("-OFF");
-                rRESET_KEEP.bits.ePowerState = ePOWER_OFF;
-                rRESET_KEEP.bits.bRestartCondition = false;
-                RESET_KEEP = rRESET_KEEP.byte;
             break;
         case    'F':
                 USBSerial_print(FW_VERSION);
@@ -445,6 +442,9 @@ void protocol_check (void)
                 case    'P':
                     /* system watch dog & repeat flag all clear */
                     repeat_data_clear();
+                    rRESET_KEEP.bits.ePowerState = ePOWER_OFF;
+                    rRESET_KEEP.bits.bRestartCondition = false;
+                    RESET_KEEP = rRESET_KEEP.byte;
                     break;
                 case    'O':
                     /*---------------------------------------------------------------------------*/
@@ -467,18 +467,6 @@ void protocol_check (void)
                         USBSerial_println("@W-RST#");
                         USBSerial_flush();
                         while (1);
-                    return;
-                case    't':
-                    USBSerial_println("@Sleep#");
-                    USBSerial_flush();
-                    GLOBAL_CFG_UNLOCK();
-                    WAKE_CTRL |= 0x20;  // P1.5 low wakeup
-
-                    GLOBAL_CFG_UNLOCK();
-                    PCON |= 0x02;
-
-                    USBSerial_println("@Wake#");
-                    USBSerial_flush();
                     return;
                 case    'T':
                     /*
@@ -525,12 +513,18 @@ void target_system_reset (void)
 void target_system_power (bool onoff)
 {
     if (onoff) {
-        /* target system force power off */
+        pinMode (PORT_CTL_POWER, OUTPUT);
+        /* Power button signal */
+        digitalWrite (PORT_CTL_POWER, 0);   delay (TARGET_RESET_DELAY);
+        digitalWrite (PORT_CTL_POWER, 1);   delay (TARGET_RESET_DELAY);
+        digitalWrite (PORT_CTL_POWER, 0);
+
         pinMode (PORT_CTL_POWER, INPUT);    pinMode (PORT_CTL_RESET, INPUT);
     } else {
         /* target system force power off */
         pinMode (PORT_CTL_POWER, OUTPUT);   pinMode (PORT_CTL_RESET, OUTPUT);
-        digitalWrite (PORT_CTL_POWER, 1);   digitalWrite (PORT_CTL_RESET, 1);
+        digitalWrite (PORT_CTL_RESET, 1);   delay (TARGET_RESET_DELAY);
+        digitalWrite (PORT_CTL_POWER, 1);   delay (TARGET_RESET_DELAY);
     }
     RESET_KEEP = rRESET_KEEP.byte;
     USBSerial_flush ();
@@ -562,6 +556,7 @@ void power_state_check (enum eBATTERY_STATUS bat_status, unsigned long bat_volt)
                         rRESET_KEEP.bits.bRestartCondition = false;
                         target_system_power (true);
                         battery_avr_volt_init ();
+                        USBSerial_println("@P--ON#");
                     }
                 }
                 else    rRESET_KEEP.bits.ePowerState = ePOWER_OFF;
