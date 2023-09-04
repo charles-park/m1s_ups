@@ -9,6 +9,12 @@ SERVICE_SCRIPT="check_ups.sh"
 
 #/*---------------------------------------------------------------------------*/
 #/*---------------------------------------------------------------------------*/
+# service disable for update
+if [ $(systemctl is-active ${SERVICE_NAME}) == "active"]; then
+    echo "service ${SERVICE_NAME} active -> inactive"
+    service {$SERVICE_NAME} disable
+fi
+
 mkdir -p ${INSTALL_PATH}
 
 cp "${SERVICE_SCRIPT}" "${INSTALL_PATH}/"
