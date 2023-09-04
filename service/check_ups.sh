@@ -260,7 +260,7 @@ function system_poweroff {
 		echo "${CURRENT_TIME}, POWEROFF" >> ${UPS_TTY_LOG}
 		echo "-------------------------" >> ${UPS_TTY_LOG}
 	fi
-	# poweroff
+	poweroff
 	exit 0
 }
 
