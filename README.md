@@ -5,7 +5,8 @@ ch55x 참조 사이트
 * <https://github.com/DeqingSun/ch55xduino>
 * <https://cdn.jsdelivr.net/gh/DeqingSun/ch55xduino@playground>
 * <https://github.com/topics/ch552>
-
+* vnproch55x <https://github.com/LoveMHz/vnproch55x/tree/master>
+  
 arduino-cli install 참조사이트(X86)
 * <https://m.blog.naver.com/roboholic84/221815428642>
 
