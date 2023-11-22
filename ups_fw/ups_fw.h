@@ -103,6 +103,7 @@ volatile regRESET_KEEP  rRESET_KEEP;
 #define BATTERY_LEVEL_3550mV    3550
 /* Force off Battery level */
 #define BATTERY_LEVEL_OFF       3300
+#define BATTERY_BOOT_LEVEL      3400
 
 /*---------------------------------------------------------------------------*/
 /* Display Battery Level */

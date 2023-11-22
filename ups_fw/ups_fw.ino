@@ -13,7 +13,7 @@
 #include "ups_fw.h"
 
 /*---------------------------------------------------------------------------*/
-#define FW_VERSION  "V0-4"
+#define FW_VERSION  "V0-5"
 
 /*---------------------------------------------------------------------------*/
 /* Debug Enable Flag */
@@ -540,7 +540,8 @@ void power_state_check (enum eBATTERY_STATUS bat_status, unsigned long bat_volt)
 {
     bool boot_condition = false;
 
-    if (bat_volt > BATTERY_LEVEL_OFF) {
+    if (((bat_volt > BATTERY_LEVEL_OFF)  && (rRESET_KEEP.bits.ePowerState == ePOWER_ON)) ||
+        ((bat_volt > BATTERY_BOOT_LEVEL) && (rRESET_KEEP.bits.ePowerState == ePOWER_INIT))) {
         switch (rRESET_KEEP.bits.ePowerState) {
             case    ePOWER_INIT:
                 boot_condition = true;
@@ -571,7 +572,7 @@ void power_state_check (enum eBATTERY_STATUS bat_status, unsigned long bat_volt)
         }
     } else {
         if (bat_status != eBATTERY_REMOVED) {
-            rRESET_KEEP.bits.ePowerState = ePOWER_OFF;
+            rRESET_KEEP.bits.ePowerState = ePOWER_INIT;
             rRESET_KEEP.bits.bGpioStatus = true;
             target_system_power (false);
         } else {
