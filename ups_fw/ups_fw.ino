@@ -13,7 +13,7 @@
 #include "ups_fw.h"
 
 /*---------------------------------------------------------------------------*/
-#define FW_VERSION  "V0-5"
+#define FW_VERSION  "V0-6"
 
 /*---------------------------------------------------------------------------*/
 /* Debug Enable Flag */
@@ -540,7 +540,7 @@ void power_state_check (enum eBATTERY_STATUS bat_status, unsigned long bat_volt)
 {
     bool boot_condition = false;
 
-    if (((bat_volt > BATTERY_LEVEL_OFF)  && (rRESET_KEEP.bits.ePowerState == ePOWER_ON)) ||
+    if (((bat_volt > BATTERY_LEVEL_OFF)  && (rRESET_KEEP.bits.ePowerState != ePOWER_INIT)) ||
         ((bat_volt > BATTERY_BOOT_LEVEL) && (rRESET_KEEP.bits.ePowerState == ePOWER_INIT))) {
         switch (rRESET_KEEP.bits.ePowerState) {
             case    ePOWER_INIT:

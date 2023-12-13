@@ -31,7 +31,7 @@ BATTERY_LEVEL_0mV="0"
 #/* BATERRY_LEVEL_0mV  : Maintains power until the battery is fully discharged. */
 #/*---------------------------------------------------------------------------*/
 CONFIG_POWEROFF_BATTERY_LEVEL=${BATTERY_LEVEL_FULL}
-# CONFIG_POWEROFF_BATTERY_LEVEL=${BATTERY_LEVEL_3900mV}
+# CONFIG_POWEROFF_BATTERY_LEVEL=${BATTERY_LEVEL_3550mV}
 
 #/*---------------------------------------------------------------------------*/
 #/* Set battery level for system power on */
@@ -104,6 +104,9 @@ UPS_CMD_CHARGER_STATUS="@C0#"
 # Send command to ups off to UPS.
 UPS_CMD_POWEROFF="@P0#"
 
+# Send command to firmware version to UPS.
+UPS_CMD_FIRMWARE_VER="@F0#"
+
 # Send command to power on level to UPS.
 # *     : Detect charging status.(default)
 # 0 ~ 4 : BATTERY LEVEL
@@ -125,6 +128,7 @@ UPS_CMD_STR=""
 UPS_BATTERY_VOLT="0"
 UPS_STATUS_CHRG="0"
 UPS_STATUS_FULL="0"
+UPS_FIRMWARE_VER="0"
 
 #/*---------------------------------------------------------------------------*/
 #/*---------------------------------------------------------------------------*/
@@ -185,6 +189,10 @@ function ups_cmd_send {
 			# Update charger status data.
 			UPS_STATUS_CHRG=`cut -c 6 < ${UPS_TTY_DATA}`
 			UPS_STATUS_FULL=`cut -c 4 < ${UPS_TTY_DATA}`
+			;;
+		${UPS_CMD_FIRMWARE_VER})
+			# Update battery volt data.
+			UPS_FIRMWARE_VER=`cut -c 3-6 < ${UPS_TTY_DATA}`
 			;;
 		* )
 			;;
@@ -391,6 +399,9 @@ fi
 #/*---------------------------------------------------------------------------*/
 #/* Main Loop (The script takes about 4-5 seconds to run once.) */
 #/*---------------------------------------------------------------------------*/
+UPS_CMD_STR=${UPS_CMD_FIRMWARE_VER}
+ups_cmd_send
+
 while true
 do
 	echo "------------------------------------------------------------"
@@ -405,7 +416,7 @@ do
 	CURRENT_TIME=$(date)
 
 	#/* Display UPS Status */
-	echo ${CURRENT_TIME}
+	echo "${CURRENT_TIME}, Firmware Ver ${UPS_FIRMWARE_VER}"
 	check_ups_status
 
 	#/* Battery Log save */
