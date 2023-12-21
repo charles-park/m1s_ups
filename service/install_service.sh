@@ -5,7 +5,8 @@
 INSTALL_PATH="/root/m1s_ups"
 SYSTEM_PATH="/etc/systemd/system"
 SERVICE_NAME="m1s_ups"
-SERVICE_SCRIPT="check_ups.sh"
+SERVICE_UPS_CHECK_SCRIPT="check_ups.sh"
+SERVICE_UPS_OFF_SCRIPT="off_ups.sh"
 
 #/*---------------------------------------------------------------------------*/
 #/*---------------------------------------------------------------------------*/
@@ -19,7 +20,8 @@ fi
 
 mkdir -p ${INSTALL_PATH}
 
-cp "${PWD}/${SERVICE_SCRIPT}" "${INSTALL_PATH}/"
+cp "${PWD}/${SERVICE_UPS_CHECK_SCRIPT}" "${INSTALL_PATH}/"
+cp "${PWD}/${SERVICE_UPS_OFF_SCRIPT}" "${INSTALL_PATH}/"
 cp "${PWD}/${SERVICE_NAME}.service" "${SYSTEM_PATH}/"
 
 # service enable

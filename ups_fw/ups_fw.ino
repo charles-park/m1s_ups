@@ -13,7 +13,7 @@
 #include "ups_fw.h"
 
 /*---------------------------------------------------------------------------*/
-#define FW_VERSION  "V0-6"
+#define FW_VERSION  "V0-7"
 
 /*---------------------------------------------------------------------------*/
 /* Debug Enable Flag */
@@ -441,11 +441,17 @@ void protocol_check (void)
                     break;
                 case    'P':
                     /* system watch dog & repeat flag all clear */
-                    repeat_data_clear();
-                    rRESET_KEEP.bits.ePowerState = ePOWER_OFF;
-                    rRESET_KEEP.bits.bRestartCondition = false;
                     rRESET_KEEP.bits.bGpioStatus = true;
-                    RESET_KEEP = rRESET_KEEP.byte;
+                    rRESET_KEEP.bits.bRestartCondition = false;
+                    if (data != 'O') {
+                        repeat_data_clear();
+                        rRESET_KEEP.bits.ePowerState = ePOWER_OFF;
+                        RESET_KEEP = rRESET_KEEP.byte;
+                    } else {
+                        rRESET_KEEP.bits.ePowerState = ePOWER_ON;
+                        RESET_KEEP = rRESET_KEEP.byte;
+                        return;
+                    }
                     break;
                 case    'O':
                     /*---------------------------------------------------------------------------*/

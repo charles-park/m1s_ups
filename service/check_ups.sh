@@ -104,6 +104,9 @@ UPS_CMD_CHARGER_STATUS="@C0#"
 # Send command to ups off to UPS.
 UPS_CMD_POWEROFF="@P0#"
 
+# Send command to ups state change to UPS.(state POWERON)
+UPS_CMD_STATE_POWERON="@PO#"
+
 # Send command to firmware version to UPS.
 UPS_CMD_FIRMWARE_VER="@F0#"
 
@@ -411,6 +414,9 @@ fi
 #/*---------------------------------------------------------------------------*/
 #/* Main Loop (The script takes about 4-5 seconds to run once.) */
 #/*---------------------------------------------------------------------------*/
+UPS_CMD_STR=${UPS_CMD_STATE_POWERON}
+ups_cmd_send
+
 UPS_CMD_STR=${UPS_CMD_FIRMWARE_VER}
 ups_cmd_send
 
